@@ -1,0 +1,26 @@
+{
+    "name": "nordgen/db-batch",
+    "description": "Database batch toolkit",
+    "version": "1.0.0",
+    "require": {
+        "box/spout": "^2.4",
+        "adodb/adodb-php": "^5.20"
+    },
+    "require-dev": {
+        "codeception/codeception": "^2.1",
+        "psy/psysh": "^0.7",
+        "monolog/monolog": "*"
+    },
+    "license": "AGPLv3.0",
+    "authors": [
+        {
+            "name": "Kjell-Ake Lundblad",
+            "email": "kjellake.lundblad@nordgen.org"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "nordgen\\DbBatch\\": "src/"
+        }
+    }
+}
