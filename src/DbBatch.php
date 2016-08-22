@@ -161,9 +161,12 @@ class DbBatch {
 			$reader = ReaderFactory::create ( $readerType ); // for $readerType files
 		}
 		
-		$reader->setFieldDelimiter ( $fieldDelimiter );
-		$reader->setFieldEnclosure ( $fieldEnclosure );
-		$reader->setEndOfLineCharacter ( $fieldEol );
+		if ($readerType == Type::CSV) {
+		    $reader->setFieldDelimiter ( $fieldDelimiter );
+		    $reader->setFieldEnclosure ( $fieldEnclosure );
+		    $reader->setEndOfLineCharacter ( $fieldEol );
+		}
+
 		
 		$reader->open ( $filepath );
 		
@@ -361,6 +364,7 @@ class DbBatch {
 			        continue;
 			    }
 				$firstRow = true;
+				$successTotal = true;
 				foreach ( $sheet->getRowIterator () as $rawrow ) {
 					if ($firstRow) {
 						$firstRow = false;
@@ -375,7 +379,8 @@ class DbBatch {
 					
 					if (isset ( $rowPopulator ) && is_callable ( $rowPopulator )) {
 						
-						$this->insertRowIntoTable ( $table, $row, $rownum, $rowPopulator, $extraData );
+						$success = $this->insertRowIntoTable ( $table, $row, $rownum, $rowPopulator, $extraData );
+						$successTotal = $successTotal && !!$success; 
 					}
 					if (isset ( $afterInsert ) && is_callable ( $afterInsert )) {
 						$afterInsert ( $row, $rownum, $extraData );
@@ -390,6 +395,8 @@ class DbBatch {
 		} finally {
 			$this->fileReader->close ();
 		}
+		
+		return $successTotal;
 	}
 	
 	/**
