@@ -9,6 +9,7 @@ use nordgen\DbBatch\CsvParser\CsvParser;
 use Box\Spout\Common\Helper\GlobalFunctionsHelper;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
+use nordgen\SestoLibs\helpers\StringTemplateHelper;
 
 /**
  *
@@ -82,6 +83,13 @@ class DbBatch {
 						'getFileReaderObject' 
 				), $arguments );
 				break;
+				
+			case 'isAssoc' :
+			    return call_user_func_array ( array (
+			    $this,
+			    'isAssoc'
+			        ), $arguments );
+			    break;
 			
 			default :
 				;
@@ -125,6 +133,10 @@ class DbBatch {
 				$name,
 				$arguments 
 		) );
+	}
+	
+	public function getDb() {
+	    return $this->db;
 	}
 	
 	/**
@@ -329,13 +341,13 @@ class DbBatch {
 	 * @param string $table
 	 *        	tablename
 	 * @param callable $rowPopulator
-	 *        	clousre to handle each row
+	 *        	closure to handle each row
 	 * @param array $opt        	
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
 	 */
 	public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet=null) {
-		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt ['extraData'] : [ ];
+		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt['extraData'] : [ ];
 		$beforeInsert = (isset ( $opt ) && array_key_exists ( 'beforeInsert', $opt )) ? $opt ['beforeInsert'] : function ($row, $rownum, $extraData) {
 		};
 		$afterInsert = (isset ( $opt ) && array_key_exists ( 'afterInsert', $opt )) ? $opt ['afterInsert'] : function ($row, $rownum, $extraData) {
@@ -360,7 +372,7 @@ class DbBatch {
 		
 		try {
 			foreach ( $sheetIterator as $sheet ) {
-			    if (isset($preferedSheet) && $preferedSheet != $sheet) {
+			    if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
 			        continue;
 			    }
 				$firstRow = true;
@@ -394,10 +406,108 @@ class DbBatch {
 			throw $e;
 		} finally {
 			$this->fileReader->close ();
+			$opt ['extraData'] = $extraData;
 		}
 		
 		return $successTotal;
 	}
+	
+	
+	/**
+	 * Updates given table in given database with data from file
+	 *
+	 * @param string $filepath
+	 *        	name to file to update from
+	 * @param string $table
+	 *        	tablename
+	 * @param callable $rowUpdator
+	 *        	closure to handle each row
+	 * @param array $opt
+	 *
+	 * @uses ADODB|yii\db\connection $this->db database connector
+	 */
+	public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet=null) {
+	    $extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt['extraData'] : [ ];
+	    $beforeUpdate = (isset ( $opt ) && array_key_exists ( 'beforeUpdate', $opt )) ? $opt ['beforeUpdate'] : function ($row, $rownum, $extraData) {
+	    };
+	    $afterUpdate = (isset ( $opt ) && array_key_exists ( 'afterUpdate', $opt )) ? $opt ['afterUpdate'] : function ($row, $rownum, $extraData) {
+	    };
+	
+	    $beforeUpdate = $beforeUpdate->bindTo($this);
+        $afterUpdate = $afterUpdate->bindTo($this);
+        
+        $ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
+        
+        $updateWhereCondition = $opt['updateWhereCondition'] ?  : null;
+        
+        
+        // Define an array_keymap function that takes an array and a closure and then returns key mapped closure result
+        
+        $array_keymap = function($callback, $arr) {
+	        $result = [];
+	        array_walk($arr, function($value, $key) use($callback,&$result) {
+	            $result[$key] = $callback($value, $key);
+	        });
+	            return $result;
+	    };
+	    
+	    
+	    //$someresult = StringTemplateHelper::template($query, $_REQUEST['kv']);
+	    
+	
+	    $sheetIterator = $this->getSheetIteratorObject ( $filepath, $opt );
+	
+	    $rownum = - 1;
+	
+	    $this->startTrans ();
+	
+	    try {
+	        foreach ( $sheetIterator as $sheet ) {
+	            if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
+	                continue;
+	            }
+	            $firstRow = true;
+	            $secondRow = false;
+	            $successTotal = true;
+	            foreach ( $sheet->getRowIterator () as $rawrow ) {
+	                if ($firstRow) {
+	                    $firstRow = false;
+	                    $secondRow = true;
+	                    $head = $rawrow;
+	                    continue;
+	                }
+	                if ($secondRow && $ignoreSecondRow) {
+	                    $secondRow = false;
+	                    continue;
+	                }
+	                $rownum ++;
+	                $row = array_combine ( $head, $rawrow );
+	                if (isset ( $beforeUpdate ) && is_callable ( $beforeUpdate )) {
+	                    $beforeUpdate ( $row, $rownum, $extraData );
+	                }
+	                	
+	                if (isset ( $rowUpdator ) && is_callable ( $rowUpdator )) {
+	                    $success = $this->updateRowInTable ( $table, $row, $rownum, $rowUpdator, $updateWhereCondition, $extraData );
+	                    $successTotal = $successTotal && !!$success;
+	                }
+	                if (isset ( $afterUpdate ) && is_callable ( $afterUpdate )) {
+	                    $afterUpdate ( $row, $rownum, $extraData );
+	                }
+	            }
+	        }
+	        	
+	        $this->completeTrans ();
+	    } catch ( Exception $e ) {
+	        $this->rollbackTrans ();
+	        throw $e;
+	    } finally {
+	        $this->fileReader->close ();
+	        $opt ['extraData'] = $extraData;
+	    }
+	
+	    return $successTotal;
+	}
+	
 	
 	/**
 	 * Populates given table in given database with data from file
@@ -548,16 +658,25 @@ SQL;
 			switch ($this->connectionType) {
 			case 'ADODB' :
 				$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
+				$isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+				
 				// Create empty recordset
 				$sql = "SELECT * FROM $table WHERE $pk = -1";
 				$rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
+				
+				$extraData ['rs'] = $rs;
 				
 				$rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
 				
 				// Ignore row if it is false
 				if (!!$rowToInsert) {
 				    $insertSQL = $this->db->GetInsertSQL ( $rs, $rowToInsert );
-				    $this->db->Execute ( $insertSQL ); // Insert the record into the database;
+				    $result = $this->db->Execute ( $insertSQL ); // Insert the record into the database;
+				    if (!$result && $isThrowExceptionEnabled) {
+				        throw new \Exception($this->db->ErrorMsg());
+				    }
+				} elseif ($isThrowExceptionEnabled) {
+				    throw new \Exception("Could not prepare an insert sql.");
 				}
 				
 				break;
@@ -572,6 +691,81 @@ SQL;
 				;
 				break;
 		}
+	}
+	
+	
+	
+	/**
+	 *
+	 * @param string $table
+	 * @param array $row
+	 * @param array|callable $rowUpdator
+	 * @param array $extraData
+	 */
+	public function updateRowInTable($table, $row, $rownum, $rowUpdator, $condition = null, &$extraData = []) {
+	    switch ($this->connectionType) {
+	        case 'ADODB' :
+	            $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+	            
+	            if ($isThrowExceptionEnabled && !!$condition) {
+	                throw new \Exception("Update without condition.");
+	            }
+	            // Create empty recordset
+	            $sql = "SELECT * FROM $table WHERE $pk = -1";
+	            $rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
+	            
+	            $extraData ['rs'] = $rs;
+	
+	            $rowToUpdate = $this->getRowToInsert ( $rowUpdator, $row, $rownum, $extraData );
+	            
+	            // parse $condition with $rowToUpdate context
+	            $templateData = [
+	                'fileRow' => &$row,
+	                'updateRow' => &$rowToUpdate,
+	                'extraData' => &$extraData
+	            ];
+	            
+	            if (isset($condition) && is_array($condition) && count($condition) > 0) {
+	                $callback = function($value, $key) use ($row){
+	                    return "$key = $value";
+	                };
+	                $condition = implode(' and ', self::arrayKeyMap($callback, $condition));
+	            }
+	            
+	            // i.e. $condition = "accide = #extraData[accide]"; => 
+	            // $condition = "accide = 345345; =>
+	            
+	            $condition = StringTemplateHelper::template($condition, $templateData);
+	            
+	            // Select recordset to update
+	            $sql = "SELECT * FROM $table WHERE $condition";
+	            $rs = $this->db->Execute ( $sql ); // Execute the query and get selected recordset
+
+	            
+	
+	            // Ignore row if it is false
+	            if (!!$rowToUpdate) {
+	                $updateSQL = $this->db->GetUpdateSQL ( $rs, $rowToUpdate );
+	                $result = $this->db->Execute ( $updateSQL ); // Update the record in the database;
+	                if (!$result && $isThrowExceptionEnabled) {
+	                    throw new \Exception($this->db->ErrorMsg());
+	                }
+	            } elseif ($isThrowExceptionEnabled) {
+	                throw new \Exception("Could not prepare an insert sql.");
+	            }
+	
+	            break;
+	        case 'yii\\db\\Connection' :
+	            $rowToUpdate = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
+	            // Ignore row if it is false
+	            if (!!$rowToUpdate) {
+	                $this->db->createCommand ()->update ( $table, $rowToUpdate );
+	            }
+	            break;
+	        default :
+	            ;
+	            break;
+	    }
 	}
 	
 	/**
@@ -594,7 +788,7 @@ SQL;
 	 * @throws \Exception
 	 * @return mixed|\nordgen\DbBatch\Closure
 	 */
-	public function getRowToInsert($rowPopulator, $row, $rownum, $extraData) {
+	public function getRowToInsert($rowPopulator, $row, $rownum, &$extraData) {
 		return $this->processClosure ( $rowPopulator, $row, $rownum, $extraData );
 	}
 	
@@ -606,19 +800,20 @@ SQL;
 	 * @throws \Exception
 	 * @return mixed|\nordgen\DbBatch\Closure
 	 */
-	public function processClosure($rowPopulator, $row, $rownum, $extraData) {
+	public function processClosure($rowPopulator, $row, $rownum, &$extraData) {
+	    $overideRowWithKeyVals = isset ( $extraData ['overideRowWithKeyVals'] ) ? $extraData ['overideRowWithKeyVals'] : [];
 		switch (gettype ( $rowPopulator )) {
 			case 'object' :
 				if (is_callable ( $rowPopulator )) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
-					return $rowPopulator ( $row, $rownum, $extraData );
+					return $overideRowWithKeyVals + $rowPopulator ( $row, $rownum, $extraData );
 				}
 				if ($rowPopulator instanceof Closure) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
-					return call_user_func_array ( $rowPopulator, [ 
+					return $overideRowWithKeyVals + call_user_func_array ( $rowPopulator, [ 
 							$row,
 							$rownum,
-							$extraData 
+							&$extraData 
 					] );
 				}
 				
@@ -626,18 +821,18 @@ SQL;
 			case 'array' :
 			case 'string' :
 				if (is_callable ( $rowPopulator)) {
-                    return call_user_func_array($rowPopulator, [ 
+                    return $overideRowWithKeyVals + call_user_func_array($rowPopulator, [ 
 							$row,
 							$rownum,
-							$extraData 
+							&$extraData 
 					] );
 				} elseif (is_array ( $rowPopulator )) {
-					return $rowPopulator;
+					return $overideRowWithKeyVals + $rowPopulator;
 				}
 				break;
 				
 			case 'NULL' :
-			    return $row;
+			    return $overideRowWithKeyVals + $row;
 			    break;
 			    
 			default :
@@ -1016,5 +1211,22 @@ SQL;
 				;
 				break;
 		}
+	}
+	
+	
+	protected function isAssoc(array $arr)
+	{
+	    if (array() === $arr)
+	        return false;
+	        return array_keys($arr) !== range(0, count($arr) - 1);
+	}
+	
+	
+	protected static function arrayKeyMap($callback, $arr) {
+        $result = [];
+        array_walk($arr, function($value, $key) use($callback,&$result) {
+            $result[$key] = $callback($value, $key);
+        });
+        return $result;
 	}
 }
