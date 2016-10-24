@@ -335,7 +335,9 @@ class DbBatch {
 	
 	/**
 	 * Populates given table in given database with data from file
-	 *
+	 * 
+	 * <p>NB $opt['extraData']['pk'] has to be set if 'id' is not primary key</p>
+	 * 
 	 * @param string $filepath
 	 *        	name to file to populate from
 	 * @param string $table
@@ -348,13 +350,15 @@ class DbBatch {
 	 */
 	public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet=null) {
 		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt['extraData'] : [ ];
-		$beforeInsert = (isset ( $opt ) && array_key_exists ( 'beforeInsert', $opt )) ? $opt ['beforeInsert'] : function ($row, $rownum, $extraData) {
+		$beforeInsert = (isset ( $opt ) && array_key_exists ( 'beforeInsert', $opt ) && isset($opt['beforeInsert'])) ? $opt ['beforeInsert'] : function ($row, $rownum, $extraData) {
 		};
-		$afterInsert = (isset ( $opt ) && array_key_exists ( 'afterInsert', $opt )) ? $opt ['afterInsert'] : function ($row, $rownum, $extraData) {
+		$afterInsert = (isset ( $opt ) && array_key_exists ( 'afterInsert', $opt ) && isset($opt['afterInsert'])) ? $opt ['afterInsert'] : function ($row, $rownum, $extraData) {
 		};
 		
 		$beforeInsert = $beforeInsert->bindTo ( $this );
 		$afterInsert = $afterInsert->bindTo ( $this );
+		
+		$ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
 		
 		/*
 		 * if (isset($opt) && array_key_exists('fieldHandleSpecialCases', $opt) && $opt['fieldHandleSpecialCases'] && ((array_key_exists ( 'readerType', $opt )) ? $opt ['readerType'] : Type::CSV) == Type::CSV) {
@@ -376,11 +380,17 @@ class DbBatch {
 			        continue;
 			    }
 				$firstRow = true;
+				$secondRow = false;
 				$successTotal = true;
 				foreach ( $sheet->getRowIterator () as $rawrow ) {
 					if ($firstRow) {
 						$firstRow = false;
+						$secondRow = true;
 						$head = $rawrow;
+						continue;
+					}
+					if ($secondRow && $ignoreSecondRow) {
+						$secondRow = false;
 						continue;
 					}
 					$rownum ++;
@@ -390,7 +400,7 @@ class DbBatch {
 					}
 					
 					if (isset ( $rowPopulator ) && is_callable ( $rowPopulator )) {
-						
+						//TODO: insertRowTable doesn't return anything, $success always false
 						$success = $this->insertRowIntoTable ( $table, $row, $rownum, $rowPopulator, $extraData );
 						$successTotal = $successTotal && !!$success; 
 					}
@@ -415,22 +425,21 @@ class DbBatch {
 	
 	/**
 	 * Updates given table in given database with data from file
-	 *
-	 * @param string $filepath
-	 *        	name to file to update from
-	 * @param string $table
-	 *        	tablename
-	 * @param callable $rowUpdator
-	 *        	closure to handle each row
+	 * 
+	 * <p>NB $opt['extraData']['pk'] has to be set if 'id' is not primary key</p>
+	 * 
+	 * @param string $filepath name to file to update from
+	 * @param string $table tablename
+	 * @param callable $rowUpdator closure to handle each row
 	 * @param array $opt
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
 	 */
 	public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet=null) {
 	    $extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt['extraData'] : [ ];
-	    $beforeUpdate = (isset ( $opt ) && array_key_exists ( 'beforeUpdate', $opt )) ? $opt ['beforeUpdate'] : function ($row, $rownum, $extraData) {
+	    $beforeUpdate = (isset ( $opt ) && array_key_exists ( 'beforeUpdate', $opt ) && isset($opt['beforeUpdate'])) ? $opt ['beforeUpdate'] : function ($row, $rownum, $extraData) {
 	    };
-	    $afterUpdate = (isset ( $opt ) && array_key_exists ( 'afterUpdate', $opt )) ? $opt ['afterUpdate'] : function ($row, $rownum, $extraData) {
+	    $afterUpdate = (isset ( $opt ) && array_key_exists ( 'afterUpdate', $opt ) && isset($opt['afterUpdate'])) ? $opt ['afterUpdate'] : function ($row, $rownum, $extraData) {
 	    };
 	
 	    $beforeUpdate = $beforeUpdate->bindTo($this);
@@ -648,7 +657,8 @@ SQL;
 	}
 	
 	/**
-	 *
+	 * insertRowIntoTable
+	 * NB $extraData['pk'] has to be set if 'id' is not primary key
 	 * @param string $table        	
 	 * @param array $row        	
 	 * @param array|callable $rowPopulator        	
