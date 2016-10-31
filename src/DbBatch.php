@@ -685,9 +685,11 @@ SQL;
 				    if (!$result && $isThrowExceptionEnabled) {
 				        throw new \Exception($this->db->ErrorMsg());
 				    }
+				    return !!$result;
 				} elseif ($isThrowExceptionEnabled) {
 				    throw new \Exception("Could not prepare an insert sql.");
 				}
+				return false;
 				
 				break;
 			case 'yii\\db\\Connection' :
@@ -695,6 +697,17 @@ SQL;
 				// Ignore row if it is false
 				if (!!$rowToInsert) {
 				    $this->db->createCommand ()->insert ( $table, $rowToInsert );
+				    
+				    if ($isThrowExceptionEnabled) {
+				        return !!$this->db->createCommand ()->insert ( $table, $rowToInsert ) -> execute();
+				    } else {
+				        try {
+				            return !!$this->db->createCommand ()->insert ( $table, $rowToInsert ) -> execute();
+				        } catch (Exception $e) {
+				            return false;
+				        }
+				    }
+				     
 				}
 				break;
 			default :
@@ -713,13 +726,15 @@ SQL;
 	 * @param array $extraData
 	 */
 	public function updateRowInTable($table, $row, $rownum, $rowUpdator, $condition = null, &$extraData = []) {
+	    $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+	     
+	    if ($isThrowExceptionEnabled && !!$condition) {
+	        throw new \Exception("Update without condition.");
+	    }
+	    
 	    switch ($this->connectionType) {
 	        case 'ADODB' :
-	            $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
 	            
-	            if ($isThrowExceptionEnabled && !!$condition) {
-	                throw new \Exception("Update without condition.");
-	            }
 	            // Create empty recordset
 	            $sql = "SELECT * FROM $table WHERE $pk = -1";
 	            $rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
@@ -760,16 +775,31 @@ SQL;
 	                if (!$result && $isThrowExceptionEnabled) {
 	                    throw new \Exception($this->db->ErrorMsg());
 	                }
+	                
+	                return !!$result;
+	                
 	            } elseif ($isThrowExceptionEnabled) {
 	                throw new \Exception("Could not prepare an insert sql.");
 	            }
+	            
+	            return false;
 	
 	            break;
 	        case 'yii\\db\\Connection' :
 	            $rowToUpdate = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
 	            // Ignore row if it is false
 	            if (!!$rowToUpdate) {
-	                $this->db->createCommand ()->update ( $table, $rowToUpdate );
+	                
+	                if ($isThrowExceptionEnabled) {
+	                    return !!$this->db->createCommand ()->update ( $table, $rowToUpdate ) -> execute();
+	                } else {
+	                    try {
+	                        return !!$this->db->createCommand ()->update ( $table, $rowToUpdate ) -> execute();
+	                    } catch (Exception $e) {
+	                        return false;
+	                    }
+	                }
+	                
 	            }
 	            break;
 	        default :
@@ -869,7 +899,7 @@ SQL;
                 
                 $rs = $this->db->Execute($sql); // Execute the query and get the empty recordset
                 if (! $rs) {
-                    throw new \Exception("Adodb error " . $db->ErrorNo() . ": " . $db->ErrorMsg());
+                    throw new \Exception("Adodb error " . $this->db->ErrorNo() . ": " . $this->db->ErrorMsg());
                 }
                 
                 
@@ -885,15 +915,47 @@ SQL;
                 }
                 return $aRet;
                 break;
-            case 'yii\\db\\Connection' :
-                //$this->db->createCommand ( $sql )->execute ();
+            case 'yii\\db\\Connection':
+                // $this->db->createCommand ( $sql )->execute ();
                 return [];
                 break;
-            default :
+            default:
                 ;
                 break;
-		}
-	}
+        }
+    }
+
+    /**
+     *
+     * @param string $sql            
+     * @throws \Exception
+     */
+    public function getQueryFieldNamesFromQueryResultSet()
+    {
+        switch ($this->connectionType) {
+        case 'ADODB':
+            $rs = $this->getQueryResult();
+            // Get Field Names:
+            $aRet = array();
+            $lngCountFields = 0;
+            if (! $rs->EOF) {
+                for ($i = 0; $i < $rs->FieldCount(); $i ++) {
+                    $fld = $rs->FetchField($i);
+                    $aRet[$lngCountFields] = $fld->name;
+                    $lngCountFields ++;
+                }
+            }
+            return $aRet;
+            break;
+        case 'yii\\db\\Connection':
+            // $this->db->createCommand ( $sql )->execute ();
+            return [];
+        break;
+        default :
+            ;
+            break;
+        }
+    }
 	
 	
 	
