@@ -5,14 +5,7 @@
  *
  */
 namespace nordgen\DbBatch\helpers;
-/*
-if (!isset($json)) {
-    sleep( 3 );
-    require_once "$scpurl/libraries/JSON.php";
-    $json = new Services_JSON( );
-}
-global $json;
-*/
+
 
 /**
  *
@@ -24,14 +17,25 @@ class StringTemplateHelper
 
     protected static $keyValues;
 
-    static function setKeyValues(array $keyValues)
+    public static function setKeyValues(array $keyValues)
     {
         self::$keyValues = $keyValues;
     }
 
-    static function replacement($match)
+    public static function replacement($match)
     {
         $values = self::$keyValues;
+        $callback = function( $matches ) use ( $values ) {
+            return self::replacementInternal($matches, $values);
+        };
+        
+        return $callback($match);
+    }
+    
+    
+    protected static function replacementInternal($match,$values)
+    {
+        //$values = self::$keyValues;
         if (($result = self::resolveArray($values, $match[0])) != false) {
             return $result;
         }
@@ -41,7 +45,7 @@ class StringTemplateHelper
             $key = $values["${match2['key']}"];
             $key_exists = gettype($key) === "string" || gettype($key) === 'number';
             if ($key_exists) {
-                
+    
                 // Convert key if numeric
                 if (is_numeric($key)) {
                     if (is_int($key)) {
@@ -58,7 +62,7 @@ class StringTemplateHelper
                         $value = floatval($value);
                     }
                 }
-                
+    
                 switch ("${match2['op']}") {
                     case '==':
                         $condition = $key === $value;
@@ -78,19 +82,21 @@ class StringTemplateHelper
                     case '<=':
                         $condition = $key >= $value;
                         break;
-                    
+    
                     default:
                         break;
                 }
                 return ($condition) ? $match2['true_case'] : $match2['false_case'];
             }
-            
-            // return $match2[false_case];
+        
+    
+        // return $match2[false_case];
         }
+        
         return gettype($values["$match[1]"]) === "string" || gettype($values["$match[1]"]) === 'number' ? $values["$match[1]"] : "$match[0]";
     }
     
-    static function resolveArray($arr, $keyStr) {
+    public static function resolveArray($arr, $keyStr) {
         $re = '/(\w+)((\[\w+])*)/';
         if(preg_match($re, $keyStr, $matches)) {
             $keyArr = [$matches[1]];
@@ -117,11 +123,22 @@ class StringTemplateHelper
     
     
 
-    static function template($template, $values)
+    public static function template($template, $values)
     {
-        self::setKeyValues($values);
+        //self::setKeyValues($values);
+        
         //return preg_replace_callback('/#\{([^{}]*)}/', '_replacement', $template);
-        return preg_replace_callback('/#\{([^{}]*)}/', array('StringTemplateHelper','replacement'), $template);
+        //return preg_replace_callback('/#\{([^{}]*)}/', array('StringTemplateHelper','replacement'), $template);
+        //return preg_replace_callback('/(.+?#\{([^{]*)})+?/', 'StringTemplateHelper::replacement', $template);
+        //return preg_replace_callback('/#\{([^{}]*)}/', 'StringTemplateHelper::replacement', $template);
+        
+        
+        $callback = function( $matches ) use ( $values ) {
+            return self::replacementInternal($matches, $values);
+        };
+        
+        
+        return preg_replace_callback('/#\{([^{}]*)}/', $callback, $template);
     }
 
     /**
@@ -131,7 +148,7 @@ class StringTemplateHelper
      *            A template string with #{xxx} key names
      * @return multitype: An array with key names
      */
-    static function scrapeStringForKeyNames($template)
+    public static function scrapeStringForKeyNames($template)
     {
         $matches = array();
         if (preg_match_all('/#\{([^{}]*)}/', $template, $matches)) {
@@ -141,7 +158,7 @@ class StringTemplateHelper
         return array();
     }
 
-    static function scrapeFileForKeyNames($filename)
+    public static function scrapeFileForKeyNames($filename)
     {
         return self::scrapeStringForKeyNames(file_get_contents($filename));
     }
@@ -206,7 +223,7 @@ class StringTemplateHelper
         return $ret;
     }
 
-    static function readIniFile($filename)
+    public static function readIniFile($filename)
     {
         //global $json;
         // $data = parse_ini_file($filename, true, INI_SCANNER_RAW);
@@ -235,7 +252,7 @@ class StringTemplateHelper
         return $data;
     }
 
-    static function createSqltHelperStruct($dirpath)
+    public static function createSqltHelperStruct($dirpath)
     {
         $struct = array();
         if (! isset($dirpath)) {
