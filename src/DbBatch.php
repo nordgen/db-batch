@@ -9,7 +9,7 @@ use nordgen\DbBatch\CsvParser\CsvParser;
 use Box\Spout\Common\Helper\GlobalFunctionsHelper;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
-use nordgen\DbBatch\helpers\StringTemplateHelper;
+use nordgen\DbBatch\Helpers\StringTemplateHelper;
 
 /**
  *
@@ -334,6 +334,16 @@ class DbBatch {
 	}
 	
 	/**
+	 * Helper function to allow different length in head (keys) and row (values) arrays.
+	 * @param array $head
+	 * @param array $row
+	 */
+	public function headRowArrayCombine($head, $row) {
+		$min = min(count($head), count($row));
+		return array_combine(array_slice($head, 0, $min), array_slice($row, 0, $min));
+	}
+	
+	/**
 	 * Populates given table in given database with data from file
 	 * 
 	 * <p>NB $opt['extraData']['pk'] has to be set if 'id' is not primary key</p>
@@ -394,7 +404,8 @@ class DbBatch {
 						continue;
 					}
 					$rownum ++;
-					$row = array_combine ( $head, $rawrow );
+					$row = array_combine ( $head, $rawrow ) ?: $this->headRowArrayCombine($head, $rawrow);
+					
 					if (isset ( $beforeInsert ) && is_callable ( $beforeInsert )) {
 						$beforeInsert ( $row, $rownum, $extraData );
 					}
@@ -490,7 +501,7 @@ class DbBatch {
 	                    continue;
 	                }
 	                $rownum ++;
-	                $row = array_combine ( $head, $rawrow );
+	                $row = array_combine ( $head, $rawrow ) ?: $this->headRowArrayCombine($head, $rawrow);
 	                if (isset ( $beforeUpdate ) && is_callable ( $beforeUpdate )) {
 	                    $beforeUpdate ( $row, $rownum, $extraData );
 	                }
@@ -669,6 +680,7 @@ SQL;
 			case 'ADODB' :
 				$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
 				$isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+				$noInsertOnEmptyRow = isset ( $extraData ['noInsertOnEmptyRow'] ) ? $extraData ['noInsertOnEmptyRow'] === true : false;
 				
 				// Create empty recordset
 				$sql = "SELECT * FROM $table WHERE $pk = -1";
@@ -686,7 +698,11 @@ SQL;
 				        throw new \Exception($this->db->ErrorMsg());
 				    }
 				    return !!$result;
-				} elseif ($isThrowExceptionEnabled) {
+				}
+				elseif ($noInsertOnEmptyRow) {
+					return true;
+				}
+				elseif ($isThrowExceptionEnabled) {
 				    throw new \Exception("Could not prepare an insert sql.");
 				}
 				return false;
