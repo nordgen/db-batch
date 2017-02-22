@@ -1,6 +1,6 @@
 <?php
 
-namespace nordgen\DbBatch\helpers;
+namespace nordgen\DbBatch\Helpers;
 
 class ItisJsonHelper {
 
