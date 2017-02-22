@@ -9,7 +9,7 @@ use nordgen\DbBatch\CsvParser\CsvParser;
 use Box\Spout\Common\Helper\GlobalFunctionsHelper;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
-use nordgen\DbBatch\helpers\StringTemplateHelper;
+use nordgen\DbBatch\Helpers\StringTemplateHelper;
 
 /**
  *

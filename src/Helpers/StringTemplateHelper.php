@@ -4,7 +4,7 @@
  *
  *
  */
-namespace nordgen\DbBatch\helpers;
+namespace nordgen\DbBatch\Helpers;
 
 
 /**
