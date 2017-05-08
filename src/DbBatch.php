@@ -649,7 +649,10 @@ SQL;
 	 * @param ADODB|yii\db\connection $db        	
 	 * @return string
 	 */
-	public function getConnectionType($db) {
+	public function getConnectionType($db = null) {
+	    if (!isset($db)) {
+	        $db = $this->db;
+	    }
 		$connectionType = get_class ( $db );
 		if (strpos ( $connectionType, 'ADODB' ) == 0) {
 			$connectionType = 'ADODB';

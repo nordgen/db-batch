@@ -1,13 +1,13 @@
 {
     "name": "nordgen/db-batch",
     "description": "Database batch toolkit",
-    "version": "v1.0.0",
+    "version": "v1.0.1",
     "require": {
         "box/spout": "^2.4",
         "adodb/adodb-php": "^5.20"
     },
     "require-dev": {
-        "codeception/codeception": "^2.1",
+        "codeception/codeception": "^2.2",
         "psy/psysh": "^0.7",
         "monolog/monolog": "*"
     },
