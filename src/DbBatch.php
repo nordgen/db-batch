@@ -411,7 +411,6 @@ class DbBatch {
 					}
 					
 					if (isset ( $rowPopulator ) && is_callable ( $rowPopulator )) {
-						//TODO: insertRowTable doesn't return anything, $success always false
 						$success = $this->insertRowIntoTable ( $table, $row, $rownum, $rowPopulator, $extraData );
 						$successTotal = $successTotal && !!$success; 
 					}
@@ -609,25 +608,37 @@ SQL;
 	 * @param null|array $result        	
 	 * @return void|array
 	 */
-	public function mapReader($filepath, callable $rowCallback, $opt = [], &$result = null) {
+	public function mapReader($filepath, callable $rowPopulator, &$opt = [], $preferedSheet=null, &$result = null) {
 		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt ['extraData'] : [ ];
-		
+		$ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
+		$rownum = - 1;
 		$reader = $this->getFileReader ( $filepath, $opt );
 		foreach ( $reader->getSheetIterator () as $sheet ) {
+			if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
+				continue;
+			}
 			$firstRow = true;
-			foreach ( $sheet->getRowIterator () as $rawrow ) {
-				if ($firstRow) {
-					$firstRow = false;
-					$head = $rawrow;
-					continue;
-				}
-				$row = array_combine ( $head, $rawrow );
-				$ret = $this->processClosure ( $rowPopulator, $row, $extraData );
+				$secondRow = false;
+				foreach ( $sheet->getRowIterator () as $rawrow ) {
+					if ($firstRow) {
+						$firstRow = false;
+						$secondRow = true;
+						$head = $rawrow;
+						continue;
+					}
+					if ($secondRow && $ignoreSecondRow) {
+						$secondRow = false;
+						continue;
+					}
+					$rownum++;
+					$row = array_combine ( $head, $rawrow ) ?: $this->headRowArrayCombine($head, $rawrow);
+				$ret = $this->processClosure ( $rowPopulator, $row, $rownum, $extraData );
 				if (isset ( $result ) && is_array ( $result )) {
 					$result [] = $ret;
 				}
 			}
 		}
+		$opt ['extraData'] = $extraData;
 		if (isset ( $result ) && is_array ( $result )) {
 			return $result;
 		}
@@ -845,7 +856,8 @@ SQL;
 	 * @return mixed|\nordgen\DbBatch\Closure
 	 */
 	public function getRowToInsert($rowPopulator, $row, $rownum, &$extraData) {
-		return $this->processClosure ( $rowPopulator, $row, $rownum, $extraData );
+		$overideRowWithKeyVals = isset ( $extraData ['overideRowWithKeyVals'] ) ? $extraData ['overideRowWithKeyVals'] : [];
+		return $overideRowWithKeyVals + $this->processClosure ( $rowPopulator, $row, $rownum, $extraData );
 	}
 	
 	/**
@@ -857,12 +869,13 @@ SQL;
 	 * @return mixed|\nordgen\DbBatch\Closure
 	 */
 	public function processClosure($rowPopulator, $row, $rownum, &$extraData) {
-	    $overideRowWithKeyVals = isset ( $extraData ['overideRowWithKeyVals'] ) ? $extraData ['overideRowWithKeyVals'] : [];
+	    //$overideRowWithKeyVals = isset ( $extraData ['overideRowWithKeyVals'] ) ? $extraData ['overideRowWithKeyVals'] : [];
 		switch (gettype ( $rowPopulator )) {
 			case 'object' :
 				if (is_callable ( $rowPopulator )) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
-					return $overideRowWithKeyVals + $rowPopulator ( $row, $rownum, $extraData );
+					//return $overideRowWithKeyVals + $rowPopulator ( $row, $rownum, $extraData );
+					return $rowPopulator ( $row, $rownum, $extraData );
 				}
 				if ($rowPopulator instanceof Closure) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
@@ -888,7 +901,8 @@ SQL;
 				break;
 				
 			case 'NULL' :
-			    return $overideRowWithKeyVals + $row;
+			    //return $overideRowWithKeyVals + $row;
+			    return $row;
 			    break;
 			    
 			default :
