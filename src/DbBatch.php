@@ -380,7 +380,7 @@ class DbBatch {
 		 */
 		$sheetIterator = $this->getSheetIteratorObject ( $filepath, $opt );
 		
-		$rownum = - 1;
+		$rownum = 0;
 		
 		$this->startTrans ();
 		
@@ -397,10 +397,12 @@ class DbBatch {
 						$firstRow = false;
 						$secondRow = true;
 						$head = $rawrow;
+						$rownum++;
 						continue;
 					}
 					if ($secondRow && $ignoreSecondRow) {
 						$secondRow = false;
+						$rownum++;
 						continue;
 					}
 					$rownum ++;
@@ -476,7 +478,7 @@ class DbBatch {
 	
 	    $sheetIterator = $this->getSheetIteratorObject ( $filepath, $opt );
 	
-	    $rownum = - 1;
+	    $rownum = 0;
 	
 	    $this->startTrans ();
 	
@@ -493,10 +495,12 @@ class DbBatch {
 	                    $firstRow = false;
 	                    $secondRow = true;
 	                    $head = $rawrow;
+	                    $rownum++;
 	                    continue;
 	                }
 	                if ($secondRow && $ignoreSecondRow) {
 	                    $secondRow = false;
+	                    $rownum++;
 	                    continue;
 	                }
 	                $rownum ++;
@@ -611,7 +615,7 @@ SQL;
 	public function mapReader($filepath, callable $rowPopulator, &$opt = [], $preferedSheet=null, &$result = null) {
 		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt ['extraData'] : [ ];
 		$ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
-		$rownum = - 1;
+		$rownum = 0;
 		$reader = $this->getFileReader ( $filepath, $opt );
 		foreach ( $reader->getSheetIterator () as $sheet ) {
 			if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
@@ -624,10 +628,12 @@ SQL;
 						$firstRow = false;
 						$secondRow = true;
 						$head = $rawrow;
+						$rownum++;
 						continue;
 					}
 					if ($secondRow && $ignoreSecondRow) {
 						$secondRow = false;
+						$rownum++;
 						continue;
 					}
 					$rownum++;
