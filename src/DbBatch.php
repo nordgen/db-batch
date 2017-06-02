@@ -326,7 +326,7 @@ class DbBatch {
 			if (! empty ( $errorMsg )) {
 				throw \Exception ( $errorMsg );
 			}
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			throw $e;
 		} finally {
 			$this->fileReader->close ();
@@ -423,7 +423,7 @@ class DbBatch {
 			}
 			
 			$this->completeTrans ();
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			$this->rollbackTrans ();
 			throw $e;
 		} finally {
@@ -520,7 +520,7 @@ class DbBatch {
 	        }
 	        	
 	        $this->completeTrans ();
-	    } catch ( Exception $e ) {
+	    } catch ( \Exception $e ) {
 	        $this->rollbackTrans ();
 	        throw $e;
 	    } finally {
@@ -682,7 +682,7 @@ SQL;
 			$db->Connect ( $opt ['db'] ['server'], $opt ['db'] ['user'], $opt ['db'] ['password'] ?  : null, $opt ['db'] ['database'] );
 			$db->SetFetchMode ( ADODB_FETCH_ASSOC );
 			return $db;
-		} catch ( Exception $e ) {
+		} catch ( \Exception $e ) {
 			throw $e;
 		}
 	}
@@ -739,7 +739,7 @@ SQL;
 				    } else {
 				        try {
 				            return !!$this->db->createCommand ()->insert ( $table, $rowToInsert ) -> execute();
-				        } catch (Exception $e) {
+				        } catch (\Exception $e) {
 				            return false;
 				        }
 				    }
@@ -831,7 +831,7 @@ SQL;
 	                } else {
 	                    try {
 	                        return !!$this->db->createCommand ()->update ( $table, $rowToUpdate ) -> execute();
-	                    } catch (Exception $e) {
+	                    } catch (\Exception $e) {
 	                        return false;
 	                    }
 	                }

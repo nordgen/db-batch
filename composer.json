@@ -1,26 +1,25 @@
 {
-    "name": "nordgen/db-batch",
-    "description": "Database batch toolkit",
-    "version": "v1.0.1",
-    "require": {
-        "box/spout": "^2.4",
-        "adodb/adodb-php": "^5.20"
-    },
-    "require-dev": {
-        "codeception/codeception": "^2.2",
-        "psy/psysh": "^0.7",
-        "monolog/monolog": "*"
-    },
-    "license": "AGPLv3.0",
-    "authors": [
-        {
-            "name": "Kjell-Ake Lundblad",
-            "email": "kjellake.lundblad@nordgen.org"
-        }
-    ],
-    "autoload": {
-        "psr-4": {
-            "nordgen\\DbBatch\\": "src/"
-        }
-    }
+	"name" : "nordgen/db-batch",
+	"description" : "Database batch toolkit",
+	"version" : "v1.0.2",
+	"require" : {
+		"box/spout" : "^2.4",
+		"adodb/adodb-php" : "^5.20"
+	},
+	"require-dev" : {
+		"codeception/codeception" : "^2.2",
+		"psy/psysh" : "^0.7",
+		"monolog/monolog" : "*"
+	},
+	"license" : "AGPLv3.0",
+	"authors" : [{
+			"name" : "Kjell-Ake Lundblad",
+			"email" : "kjellake.lundblad@nordgen.org"
+		}
+	],
+	"autoload" : {
+		"psr-4" : {
+			"nordgen\\DbBatch\\" : "src/"
+		}
+	}
 }
