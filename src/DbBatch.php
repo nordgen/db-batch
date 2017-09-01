@@ -381,6 +381,7 @@ class DbBatch {
 		$sheetIterator = $this->getSheetIteratorObject ( $filepath, $opt );
 		
 		$rownum = 0;
+		$successTotal = true;
 		
 		$this->startTrans ();
 		
@@ -389,6 +390,7 @@ class DbBatch {
 			    if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
 			        continue;
 			    }
+			    if ($sheet->getName() == $preferedSheet) {
 				$firstRow = true;
 				$secondRow = false;
 				$successTotal = true;
@@ -420,6 +422,7 @@ class DbBatch {
 						$afterInsert ( $row, $rownum, $extraData );
 					}
 				}
+			}
 			}
 			
 			$this->completeTrans ();
