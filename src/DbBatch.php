@@ -20,12 +20,14 @@ class DbBatch {
 	protected $yiiTransaction = null;
 	protected $connectionType = null;
 	protected $fileReader = null;
-	public function getInternalFileReader() {
+	public function getInternalFileReader()
+    {
 		$this->fileReader;
 	}
 	
 	protected $fileWriter = null;
-	public function getInternalFileWriter() {
+	public function getInternalFileWriter()
+    {
 		$this->fileWriter;
 	}
 	
@@ -49,7 +51,8 @@ class DbBatch {
 	 * @param ADODB|yii\db\connection $db        	
 	 * @throws \Exception
 	 */
-	public function __construct($db = null) {
+	public function __construct($db = null)
+    {
 		if (! isset ( $db )) {
 			return;
 		}
@@ -73,7 +76,8 @@ class DbBatch {
 	 * @param array $arguments        	
 	 * @return mixed
 	 */
-	public function __call($name, $arguments) {
+	public function __call($name, $arguments)
+    {
 		
 		// Handle non-static methods with the same name as static methods
 		switch ($name) {
@@ -108,7 +112,8 @@ class DbBatch {
 	 * @param array $arguments        	
 	 * @return mixed
 	 */
-	public static function __callStatic($name, $arguments) {
+	public static function __callStatic($name, $arguments)
+    {
 		// Handle static methods with the same name as non-static methods
 		switch ($name) {
 			case 'getFileReader' :
@@ -146,7 +151,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 * @return Box\Spout\Reader
 	 */
-	protected function getFileReaderObject($filepath, $opt = []) {
+	protected function getFileReaderObject($filepath, $opt = [])
+    {
 		return self::getFileReaderStatic ( $filepath, $opt );
 	}
 	
@@ -157,7 +163,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 * @return Box\Spout\Reader
 	 */
-	protected static function getFileReaderStatic($filepath, $opt = []) {
+	protected static function getFileReaderStatic($filepath, $opt = [])
+    {
 		$fieldDelimiter = (isset ( $opt ) && array_key_exists ( 'fieldDelimiter', $opt )) ? $opt ['fieldDelimiter'] : ",";
 		$fieldEnclosure = (isset ( $opt ) && array_key_exists ( 'fieldEnclosure', $opt )) ? $opt ['fieldEnclosure'] : '"';
 		$fieldEol = (isset ( $opt ) && array_key_exists ( 'fieldEol', $opt )) ? $opt ['fieldEol'] : "\n";
@@ -192,7 +199,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 * @return Box\Spout\Reader
 	 */
-	protected function getFileWriterObject($filepath, $opt = []) {
+	protected function getFileWriterObject($filepath, $opt = [])
+    {
 		return self::getFileWriterStatic ( $filepath, $opt );
 	}
 	
@@ -203,7 +211,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 * @return Box\Spout\Reader
 	 */
-	protected static function getFileWriterStatic($filepath, $opt = []) {
+	protected static function getFileWriterStatic($filepath, $opt = [])
+    {
 		$fieldDelimiter = (isset ( $opt ) && array_key_exists ( 'fieldDelimiter', $opt )) ? $opt ['fieldDelimiter'] : ",";
 		$fieldEnclosure = (isset ( $opt ) && array_key_exists ( 'fieldEnclosure', $opt )) ? $opt ['fieldEnclosure'] : '"';
 		$fieldEol = (isset ( $opt ) && array_key_exists ( 'fieldEol', $opt )) ? $opt ['fieldEol'] : "\n";
@@ -235,7 +244,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 * @return array
 	 */
-	protected function getCsvRowIteratorObject($filepath, $opt = []) {
+	protected function getCsvRowIteratorObject($filepath, $opt = [])
+    {
 		return self::getCsvRowIteratorStatic ( $filepath, $opt );
 	}
 	
@@ -246,7 +256,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 * @return array
 	 */
-	public static function getCsvRowIteratorStatic($filepath, $opt = []) {
+	public static function getCsvRowIteratorStatic($filepath, $opt = [])
+    {
 		$delimiter = (isset ( $opt ) && array_key_exists ( 'fieldDelimiter', $opt )) ? $opt ['fieldDelimiter'] : ",";
 		$enclosure = (isset ( $opt ) && array_key_exists ( 'fieldEnclosure', $opt )) ? $opt ['fieldEnclosure'] : '"';
 		$rows = CsvParser::fromFile ( realpath ( $filepath ), [ 
@@ -271,7 +282,8 @@ class DbBatch {
 		
 		return $sheetIterator;
 	}
-	public static function getSheetIteratorStatic($filepath, &$opt = []) {
+	public static function getSheetIteratorStatic($filepath, &$opt = [])
+    {
 		// if (isset($opt) && array_key_exists('fieldHandleSpecialCases', $opt) && $opt['fieldHandleSpecialCases'] && ((array_key_exists ( 'readerType', $opt )) ? $opt ['readerType'] : Type::CSV) == Type::CSV) {
 		// echo "----------------";
 		// $fileReader = self::getCsvRowIterator($filepath, $opt);
@@ -298,7 +310,8 @@ class DbBatch {
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
 	 */
-	public function validateHeadRowItemDiff($filepath, &$opt = []) {
+	public function validateHeadRowItemDiff($filepath, &$opt = [])
+    {
 		$errorMsg = "";
 		$sheetIterator = $this->getSheetIteratorObject ( $filepath, $opt );
 		
@@ -338,7 +351,8 @@ class DbBatch {
 	 * @param array $head
 	 * @param array $row
 	 */
-	public function headRowArrayCombine($head, $row) {
+	public function headRowArrayCombine(array $head, array $row)
+    {
 		$min = min(count($head), count($row));
 		return array_combine(array_slice($head, 0, $min), array_slice($row, 0, $min));
 	}
@@ -358,11 +372,15 @@ class DbBatch {
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
 	 */
-	public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet=null) {
-		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt['extraData'] : [ ];
-		$beforeInsert = (isset ( $opt ) && array_key_exists ( 'beforeInsert', $opt ) && isset($opt['beforeInsert'])) ? $opt ['beforeInsert'] : function ($row, $rownum, $extraData) {
+	public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet=null)
+    {
+        if (!(isset ( $opt ) && array_key_exists ( 'extraData', $opt ))) {
+            $opt ['extraData'] = [];
+        }
+        $extraData = &$opt['extraData'];
+		$beforeInsert = (isset ( $opt ) && array_key_exists ( 'beforeInsert', $opt ) && isset($opt['beforeInsert'])) ? $opt ['beforeInsert'] : function ($row, $rownum, &$extraData) {
 		};
-		$afterInsert = (isset ( $opt ) && array_key_exists ( 'afterInsert', $opt ) && isset($opt['afterInsert'])) ? $opt ['afterInsert'] : function ($row, $rownum, $extraData) {
+		$afterInsert = (isset ( $opt ) && array_key_exists ( 'afterInsert', $opt ) && isset($opt['afterInsert'])) ? $opt ['afterInsert'] : function ($row, $rownum, &$extraData) {
 		};
 		
 		$beforeInsert = $beforeInsert->bindTo ( $this );
@@ -450,7 +468,8 @@ class DbBatch {
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
 	 */
-	public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet=null) {
+	public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet=null)
+    {
 	    $extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt['extraData'] : [ ];
 	    $beforeUpdate = (isset ( $opt ) && array_key_exists ( 'beforeUpdate', $opt ) && isset($opt['beforeUpdate'])) ? $opt ['beforeUpdate'] : function ($row, $rownum, $extraData) {
 	    };
@@ -548,9 +567,11 @@ class DbBatch {
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
 	 */
-	public function export($filepath, $table = "", $rowPopulator, &$opt = []) {
-		
-		$extraData = [];
+	public function export($filepath, $table = "", $rowPopulator, &$opt = [])
+    {
+        if (!(isset ( $opt ) && array_key_exists ( 'extraData', $opt ))) {
+            $opt ['extraData'] = [];
+        }
 		
 		$this->fileWriter = $this->getFileWriterObject ( $filepath, $opt );
 		
@@ -615,8 +636,12 @@ SQL;
 	 * @param null|array $result        	
 	 * @return void|array
 	 */
-	public function mapReader($filepath, callable $rowPopulator, &$opt = [], $preferedSheet=null, &$result = null) {
-		$extraData = (isset ( $opt ) && array_key_exists ( 'extraData', $opt )) ? $opt ['extraData'] : [ ];
+	public function mapReader($filepath, callable $rowPopulator, &$opt = [], $preferedSheet=null, &$result = null)
+    {
+        if (!(isset ( $opt ) && array_key_exists ( 'extraData', $opt ))) {
+            $opt ['extraData'] = [];
+        }
+        $extraData = &$opt ['extraData'];
 		$ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
 		$rownum = 0;
 		$reader = $this->getFileReader ( $filepath, $opt );
@@ -658,7 +683,8 @@ SQL;
 	 * @param ADODB|yii\db\connection $db        	
 	 * @return string
 	 */
-	public function getConnectionType($db = null) {
+	public function getConnectionType($db = null)
+    {
 	    if (!isset($db)) {
 	        $db = $this->db;
 	    }
@@ -675,7 +701,8 @@ SQL;
 	 * @throws Exception
 	 * @return ADODB
 	 */
-	public static function getAdodbConnection($opt) {
+	public static function getAdodbConnection($opt)
+    {
 		try {
 			$db = ADONewConnection ( $opt ['db'] ['driver'] ); // eg. 'mysql' or 'oci8'
 			if (! isset ( $db )) {
@@ -698,11 +725,13 @@ SQL;
 	 * @param array|callable $rowPopulator        	
 	 * @param array $extraData        	
 	 */
-	public function insertRowIntoTable($table, $row, $rownum, $rowPopulator, &$extraData = []) {
-			switch ($this->connectionType) {
+	public function insertRowIntoTable($table, $row, $rownum, $rowPopulator, &$extraData = [])
+    {
+        $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+		switch ($this->connectionType) {
 			case 'ADODB' :
 				$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
-				$isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+
 				$noInsertOnEmptyRow = isset ( $extraData ['noInsertOnEmptyRow'] ) ? $extraData ['noInsertOnEmptyRow'] === true : false;
 				
 				// Create empty recordset
@@ -764,7 +793,8 @@ SQL;
 	 * @param array|callable $rowUpdator
 	 * @param array $extraData
 	 */
-	public function updateRowInTable($table, $row, $rownum, $rowUpdator, $condition = null, &$extraData = []) {
+	public function updateRowInTable($table, $row, $rownum, $rowUpdator, $condition = null, &$extraData = [])
+    {
 	    $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
 	     
 	    if ($isThrowExceptionEnabled && !!$condition) {
@@ -773,7 +803,7 @@ SQL;
 	    
 	    switch ($this->connectionType) {
 	        case 'ADODB' :
-	            
+                $pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
 	            // Create empty recordset
 	            $sql = "SELECT * FROM $table WHERE $pk = -1";
 	            $rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
@@ -825,7 +855,7 @@ SQL;
 	
 	            break;
 	        case 'yii\\db\\Connection' :
-	            $rowToUpdate = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
+	            $rowToUpdate = $this->getRowToInsert ( $rowUpdator, $row, $rownum, $extraData );
 	            // Ignore row if it is false
 	            if (!!$rowToUpdate) {
 	                
@@ -854,7 +884,8 @@ SQL;
 	 * @param array|callable $rowPopulator        	
 	 * @param array $extraData        	
 	 */
-	public function insertRowIntoFile($writer, $row, $rownum = null, $rowPopulator = null, &$extraData = []) {
+	public function insertRowIntoFile($writer, $row, $rownum = null, $rowPopulator = null, &$extraData = [])
+    {
 		$rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
 		$writer->addRow ( $rowToInsert );
 	}
@@ -867,7 +898,8 @@ SQL;
 	 * @throws \Exception
 	 * @return mixed|\nordgen\DbBatch\Closure
 	 */
-	public function getRowToInsert($rowPopulator, $row, $rownum, &$extraData) {
+	public function getRowToInsert($rowPopulator, $row, $rownum, &$extraData)
+    {
 		$overideRowWithKeyVals = isset ( $extraData ['overideRowWithKeyVals'] ) ? $extraData ['overideRowWithKeyVals'] : [];
 		return $overideRowWithKeyVals + $this->processClosure ( $rowPopulator, $row, $rownum, $extraData );
 	}
@@ -880,8 +912,10 @@ SQL;
 	 * @throws \Exception
 	 * @return mixed|\nordgen\DbBatch\Closure
 	 */
-	public function processClosure($rowPopulator, $row, $rownum, &$extraData) {
+	public function processClosure($rowPopulator, $row, $rownum, &$extraData)
+    {
 	    //$overideRowWithKeyVals = isset ( $extraData ['overideRowWithKeyVals'] ) ? $extraData ['overideRowWithKeyVals'] : [];
+        // TODO: Check if it is ok to remove $overideRowWithKeyVals
 		switch (gettype ( $rowPopulator )) {
 			case 'object' :
 				if (is_callable ( $rowPopulator )) {
@@ -891,7 +925,7 @@ SQL;
 				}
 				if ($rowPopulator instanceof Closure) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
-					return $overideRowWithKeyVals + call_user_func_array ( $rowPopulator, [ 
+					return $overideRowWithKeyVals + call_user_func_array ( $rowPopulator, [
 							$row,
 							$rownum,
 							&$extraData 
@@ -902,7 +936,7 @@ SQL;
 			case 'array' :
 			case 'string' :
 				if (is_callable ( $rowPopulator)) {
-                    return $overideRowWithKeyVals + call_user_func_array($rowPopulator, [ 
+                    return $overideRowWithKeyVals + call_user_func_array($rowPopulator, [
 							$row,
 							$rownum,
 							&$extraData 
@@ -1005,7 +1039,7 @@ SQL;
 	 * @param callback $callback
 	 * @param array $opt
 	 */
-	public function iterateQueryResultWithCallback(callback $callback=null, $opt=[])
+	public function iterateQueryResultWithCallback(callable $callback=null, $opt=[])
 	{
 	    switch ($this->connectionType) {
 	        case 'ADODB':
@@ -1041,7 +1075,8 @@ SQL;
 	 * @param string $sql        	
 	 * @throws \Exception
 	 */
-	public function execute($sql) {
+	public function execute($sql)
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				$rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
@@ -1063,7 +1098,8 @@ SQL;
 	 * @param string $sql        	
 	 * @throws \Exception
 	 */
-	public function query($sql) {
+	public function query($sql)
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				$rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
@@ -1084,13 +1120,23 @@ SQL;
 		
 		return $this;
 	}
-	
-	public function getQueryResult() {
+
+    /**
+     * @return ADODB|yii\db\DataReader
+     */
+    public function getQueryResult()
+    {
 		return $this->queryResult;
 	}
-	
-	
-	public function mapDbResult(callable $callback, &$extraData) {
+
+
+    /**
+     * @param callable $callback
+     * @param $extraData
+     * @return array|void
+     */
+    public function mapDbResult(callable $callback, &$extraData)
+    {
 		// Do nothing if
 		if (! isset ( $this->queryResult ) || ! $this->queryResult) {
 			return;
@@ -1101,10 +1147,14 @@ SQL;
 		}
 		return $arr;
 	}
-	
-	
-	
-	public function walkDbResult(callable $callback, &$extraData) {
+
+
+    /**
+     * @param callable $callback
+     * @param $extraData
+     */
+    public function walkDbResult(callable $callback, &$extraData)
+    {
 		
 		
 		// Do nothing if
@@ -1166,8 +1216,14 @@ SQL;
 		
 
 	}
-	
-	public function pageNextDbResult($limit = null, $offset = 0) {
+
+    /**
+     * @param null $limit
+     * @param int $offset
+     * @return array
+     */
+    public function pageNextDbResult($limit = null, $offset = 0)
+    {
 		$result = [ ];
 		foreach ( $this->queryResult as $row ) {
 			if ($this->queryResult->key () < $offset) {
@@ -1190,7 +1246,8 @@ SQL;
 	 *
 	 * @param string $sql        	
 	 */
-	public function queryScalar($sql) {
+	public function queryScalar($sql)
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				return $this->db->GetOne ( $sql ); // Execute the query
@@ -1209,7 +1266,8 @@ SQL;
 	 *
 	 * @param string $sql        	
 	 */
-	public function queryColumn($sql) {
+	public function queryColumn($sql)
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				return $this->db->GetCol ( $sql ); // Execute the query
@@ -1228,7 +1286,8 @@ SQL;
 	 *
 	 * @param string $sql        	
 	 */
-	public function queryOne($sql) {
+	public function queryOne($sql)
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				return $this->db->GetRow ( $sql ); // Execute the query
@@ -1247,7 +1306,8 @@ SQL;
 	 *
 	 * @param string $sql        	
 	 */
-	public function queryAll($sql) {
+	public function queryAll($sql)
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				return $this->db->GetAll ( $sql ); // Execute the query
@@ -1263,7 +1323,8 @@ SQL;
 	
 	/**
 	 */
-	public function startTrans() {
+	public function startTrans()
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				$this->db->StartTrans ();
@@ -1280,7 +1341,8 @@ SQL;
 	
 	/**
 	 */
-	public function failTrans() {
+	public function failTrans()
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				$this->db->FailTrans ();
@@ -1296,7 +1358,8 @@ SQL;
 	
 	/**
 	 */
-	public function rollbackTrans() {
+	public function rollbackTrans()
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				$this->db->FailTrans ();
@@ -1313,7 +1376,8 @@ SQL;
 	
 	/**
 	 */
-	public function completeTrans() {
+	public function completeTrans()
+    {
 		switch ($this->connectionType) {
 			case 'ADODB' :
 				$this->db->CompleteTrans ();
@@ -1326,17 +1390,27 @@ SQL;
 				break;
 		}
 	}
-	
-	
-	protected function isAssoc(array $arr)
+
+
+    /**
+     * @param array $arr
+     * @return bool
+     */
+    protected function isAssoc(array $arr)
 	{
 	    if (array() === $arr)
 	        return false;
 	        return array_keys($arr) !== range(0, count($arr) - 1);
 	}
-	
-	
-	protected static function arrayKeyMap($callback, $arr) {
+
+
+    /**
+     * @param callable $callback
+     * @param array $arr
+     * @return array
+     */
+    protected static function arrayKeyMap(callable $callback, array $arr=[])
+    {
         $result = [];
         array_walk($arr, function($value, $key) use($callback,&$result) {
             $result[$key] = $callback($value, $key);
