@@ -1,7 +1,6 @@
 {
 	"name" : "nordgen/db-batch",
 	"description" : "Database batch toolkit",
-	"version" : "v1.0.4",
 	"require" : {
 		"box/spout" : "^2.4",
 		"adodb/adodb-php" : "^5.20"
