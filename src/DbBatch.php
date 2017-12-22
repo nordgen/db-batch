@@ -35,20 +35,20 @@ class DbBatch {
 	
 	/**
 	 *
-	 * @var ADODB|yii\db\DataReader
+	 * @var ADODB
 	 */
 	protected $queryResult = null;
 	
 	/**
 	 *
-	 * @var ADODB|yii\db\connection
+	 * @var ADODB
 	 */
 	protected $db = null;
 	
 	/**
 	 * Constructor
 	 *
-	 * @param ADODB|yii\db\connection $db        	
+	 * @param ADODB
 	 * @throws \Exception
 	 */
 	public function __construct($db = null)
@@ -149,7 +149,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return Box\Spout\Reader
+	 * @return \Box\Spout\Reader
 	 */
 	protected function getFileReaderObject($filepath, $opt = [])
     {
@@ -161,7 +161,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return Box\Spout\Reader
+	 * @return \Box\Spout\Reader
 	 */
 	protected static function getFileReaderStatic($filepath, $opt = [])
     {
@@ -197,7 +197,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return Box\Spout\Reader
+	 * @return \Box\Spout\Reader
 	 */
 	protected function getFileWriterObject($filepath, $opt = [])
     {
@@ -209,7 +209,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return Box\Spout\Reader
+	 * @return \Box\Spout\Reader
 	 */
 	protected static function getFileWriterStatic($filepath, $opt = [])
     {
@@ -680,7 +680,7 @@ SQL;
 	
 	/**
 	 *
-	 * @param ADODB|yii\db\connection $db        	
+	 * @param ADODB
 	 * @return string
 	 */
 	public function getConnectionType($db = null)
@@ -730,36 +730,40 @@ SQL;
         $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
 		switch ($this->connectionType) {
 			case 'ADODB' :
-				$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
+                $pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
 
-				$noInsertOnEmptyRow = isset ( $extraData ['noInsertOnEmptyRow'] ) ? $extraData ['noInsertOnEmptyRow'] === true : false;
-				
-				// Create empty recordset
-				$sql = "SELECT * FROM $table WHERE $pk = -1";
-				$rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
-				
-				$extraData ['rs'] = $rs;
-				
-				$rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
-				
-				// Ignore row if it is false
-				if (!!$rowToInsert) {
-				    $insertSQL = $this->db->GetInsertSQL ( $rs, $rowToInsert );
-				    $result = $this->db->Execute ( $insertSQL ); // Insert the record into the database;
-				    if (!$result && $isThrowExceptionEnabled) {
-				        throw new \Exception($this->db->ErrorMsg());
-				    }
-				    return !!$result;
-				}
-				elseif ($noInsertOnEmptyRow) {
-					return true;
-				}
-				elseif ($isThrowExceptionEnabled) {
-				    throw new \Exception("Could not prepare an insert sql.");
-				}
-				return false;
-				
-				break;
+                $noInsertOnEmptyRow = isset ( $extraData ['noInsertOnEmptyRow'] ) ? $extraData ['noInsertOnEmptyRow'] === true : false;
+
+                if ($noInsertOnEmptyRow && empty(array_filter($row))) {
+                    return true;
+                }
+
+                // Create empty recordset
+                $sql = "SELECT * FROM $table WHERE $pk = -1";
+                $rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
+
+                $extraData ['rs'] = $rs;
+
+                $rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
+
+                // Ignore row if it is false
+                if (!!$rowToInsert) {
+                    $insertSQL = $this->db->GetInsertSQL ( $rs, $rowToInsert );
+                    $result = $this->db->Execute ( $insertSQL ); // Insert the record into the database;
+                    if (!$result && $isThrowExceptionEnabled) {
+                        throw new \Exception($this->db->ErrorMsg());
+                    }
+                    return !!$result;
+                }
+                elseif ($noInsertOnEmptyRow) {
+                    return true;
+                }
+                elseif ($isThrowExceptionEnabled) {
+                    throw new \Exception("Could not prepare an insert sql.");
+                }
+                return false;
+
+                break;
 			case 'yii\\db\\Connection' :
 				$rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
 				// Ignore row if it is false
@@ -925,7 +929,7 @@ SQL;
 				}
 				if ($rowPopulator instanceof Closure) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
-					return $overideRowWithKeyVals + call_user_func_array ( $rowPopulator, [
+					return call_user_func_array ( $rowPopulator, [
 							$row,
 							$rownum,
 							&$extraData 
@@ -936,13 +940,13 @@ SQL;
 			case 'array' :
 			case 'string' :
 				if (is_callable ( $rowPopulator)) {
-                    return $overideRowWithKeyVals + call_user_func_array($rowPopulator, [
+                    return call_user_func_array($rowPopulator, [
 							$row,
 							$rownum,
 							&$extraData 
 					] );
 				} elseif (is_array ( $rowPopulator )) {
-					return $overideRowWithKeyVals + $rowPopulator;
+					return $rowPopulator;
 				}
 				break;
 				
@@ -1081,7 +1085,7 @@ SQL;
 			case 'ADODB' :
 				$rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
 				if (! $rs) {
-					throw new \Exception ( "Adodb error " . $db->ErrorNo () . ": " . $db->ErrorMsg () );
+					throw new \Exception ( "Adodb error " . $this->db->ErrorNo () . ": " . $this->db->ErrorMsg () );
 				}
 				break;
 			case 'yii\\db\\Connection' :
@@ -1122,7 +1126,7 @@ SQL;
 	}
 
     /**
-     * @return ADODB|yii\db\DataReader
+     * @return ADODB
      */
     public function getQueryResult()
     {
