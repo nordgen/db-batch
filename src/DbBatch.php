@@ -35,20 +35,20 @@ class DbBatch {
 	
 	/**
 	 *
-	 * @var ADODB
+	 * @var mixed
 	 */
 	protected $queryResult = null;
 	
 	/**
 	 *
-	 * @var ADODB
+	 * @var \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|mixed
 	 */
 	protected $db = null;
 	
 	/**
 	 * Constructor
 	 *
-	 * @param ADODB
+	 * @param mixed
 	 * @throws \Exception
 	 */
 	public function __construct($db = null)
@@ -100,10 +100,10 @@ class DbBatch {
 				break;
 		}
 		
-		return call_user_func_array ( array (
-				$name,
-				$arguments 
-		) );
+		return call_user_func_array (
+            $name,
+            $arguments
+		);
 	}
 	
 	/**
@@ -134,10 +134,10 @@ class DbBatch {
 				break;
 		}
 		
-		return call_user_func_array ( array (
-				$name,
-				$arguments 
-		) );
+		return call_user_func_array (
+            $name,
+            $arguments
+		);
 	}
 	
 	public function getDb() {
@@ -149,7 +149,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return \Box\Spout\Reader
+	 * @return \Box\Spout\Reader\ReaderInterface
 	 */
 	protected function getFileReaderObject($filepath, $opt = [])
     {
@@ -161,7 +161,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return \Box\Spout\Reader
+	 * @return \Box\Spout\Reader\ReaderInterface
 	 */
 	protected static function getFileReaderStatic($filepath, $opt = [])
     {
@@ -197,7 +197,7 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return \Box\Spout\Reader
+	 * @return \Box\Spout\Writer\WriterInterface
 	 */
 	protected function getFileWriterObject($filepath, $opt = [])
     {
@@ -209,40 +209,46 @@ class DbBatch {
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return \Box\Spout\Reader
+	 * @return \Box\Spout\Writer\WriterInterface
 	 */
 	protected static function getFileWriterStatic($filepath, $opt = [])
     {
-		$fieldDelimiter = (isset ( $opt ) && array_key_exists ( 'fieldDelimiter', $opt )) ? $opt ['fieldDelimiter'] : ",";
-		$fieldEnclosure = (isset ( $opt ) && array_key_exists ( 'fieldEnclosure', $opt )) ? $opt ['fieldEnclosure'] : '"';
-		$fieldEol = (isset ( $opt ) && array_key_exists ( 'fieldEol', $opt )) ? $opt ['fieldEol'] : "\n";
-		$writerType = (isset ( $opt ) && array_key_exists ( 'writerType', $opt )) ? $opt ['writerType'] : Type::CSV;
+		$fieldDelimiter = (isset ( $opt ) && array_key_exists( 'fieldDelimiter', $opt )) ? $opt ['fieldDelimiter'] : ",";
+		$fieldEnclosure = (isset ( $opt ) && array_key_exists( 'fieldEnclosure', $opt )) ? $opt ['fieldEnclosure'] : '"';
+        // TODO: Test this!!!
+		// $fieldEol = (isset ( $opt ) && array_key_exists( 'fieldEol', $opt )) ? $opt ['fieldEol'] : "\n";
+		$writerType = (isset ( $opt ) && array_key_exists( 'writerType', $opt )) ? $opt ['writerType'] : Type::CSV;
 		// Type::XLSX
 		// Type::CSV
 		// Type::ODS
 		
-		if ($writerType == Type::CSV && array_key_exists ( 'fieldHandleSpecialCases', $opt ) && $opt ['fieldHandleSpecialCases'] === true) {
-			$writer = new \nordgen\DbBatch\CsvParserWrapper\Reader ();
-			$writer->setGlobalFunctionsHelper ( new GlobalFunctionsHelper () );
+		if ($writerType == Type::CSV && array_key_exists( 'fieldHandleSpecialCases', $opt ) && $opt ['fieldHandleSpecialCases'] === true) {
+			$writer = new \nordgen\DbBatch\CsvParserWrapper\Reader();
+			$writer->setGlobalFunctionsHelper( new GlobalFunctionsHelper() );
 		} else {
-			$writer = WriterFactory::create ( $writerType ); // for $readerType files
+			$writer = WriterFactory::create( $writerType ); // for $readerType files
 		}
 		
-		$writer->setFieldDelimiter ( $fieldDelimiter );
-		$writer->setFieldEnclosure ( $fieldEnclosure );
-		//$writer->setEndOfLineCharacter ( $fieldEol );
+		$writer->setFieldDelimiter( $fieldDelimiter );
+		$writer->setFieldEnclosure( $fieldEnclosure );
+
+		// TODO: Test this!!!
+        //if ($writerType == Type::CSV) {
+            //$writer->setEndOfLineCharacter( $fieldEol );
+        //}
+
 		
-		$writer->openToFile ( $filepath );
+		$writer->openToFile( $filepath );
 		
 		return $writer;
 	}
 	
 	/**
-	 * Returns array of rows
+	 * Returns iterator of for a csv file
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return array
+	 * @return \Iterator|\Traversable|NULL
 	 */
 	protected function getCsvRowIteratorObject($filepath, $opt = [])
     {
@@ -250,26 +256,34 @@ class DbBatch {
 	}
 	
 	/**
-	 * Returns array of rows
+	 * Returns iterator of for a csv file
 	 *
 	 * @param string $filepath        	
 	 * @param array $opt        	
-	 * @return array
-	 */
+	 * @return \Iterator|\Traversable|NULL
+     */
 	public static function getCsvRowIteratorStatic($filepath, $opt = [])
     {
 		$delimiter = (isset ( $opt ) && array_key_exists ( 'fieldDelimiter', $opt )) ? $opt ['fieldDelimiter'] : ",";
 		$enclosure = (isset ( $opt ) && array_key_exists ( 'fieldEnclosure', $opt )) ? $opt ['fieldEnclosure'] : '"';
-		$rows = CsvParser::fromFile ( realpath ( $filepath ), [ 
+		$iterator = CsvParser::fromFile ( realpath ( $filepath ), [
 				'encoding' => 'UTF8',
 				'delimiter' => $delimiter,
 				'enclosure' => $enclosure,
 				'header' => false,
 				'filepath' => $filepath 
 		] );
-		return $rows;
+		return isset($iterator)?$iterator->getIterator():null;
 	}
-	public function getSheetIteratorObject($filepath, &$opt = []) {
+
+    /**
+     * Returns a sheet iterator
+     *
+     * @param string $filepath
+     * @param array $opt
+     * @return \Iterator|\Traversable|NULL
+     */
+    public function getSheetIteratorObject($filepath, &$opt = []) {
 		// if (isset($opt) && array_key_exists('fieldHandleSpecialCases', $opt) && $opt['fieldHandleSpecialCases'] && ((array_key_exists ( 'readerType', $opt )) ? $opt ['readerType'] : Type::CSV) == Type::CSV) {
 		// //$reader = $this->getCsvRowIterator($filepath, $opt);
 		// $this->fileReader = \nordgen\DbBatch\CsvParserWrapper\Reader();
@@ -282,7 +296,15 @@ class DbBatch {
 		
 		return $sheetIterator;
 	}
-	public static function getSheetIteratorStatic($filepath, &$opt = [])
+
+    /**
+     * Returns a sheet iterator
+     *
+     * @param string $filepath
+     * @param array $opt
+     * @return \Iterator|\Traversable|NULL
+     */
+    public static function getSheetIteratorStatic($filepath, &$opt = [])
     {
 		// if (isset($opt) && array_key_exists('fieldHandleSpecialCases', $opt) && $opt['fieldHandleSpecialCases'] && ((array_key_exists ( 'readerType', $opt )) ? $opt ['readerType'] : Type::CSV) == Type::CSV) {
 		// echo "----------------";
@@ -308,7 +330,9 @@ class DbBatch {
 	 *        	clousre to handle each row
 	 * @param array $opt        	
 	 *
-	 * @uses ADODB|yii\db\connection $this->db database connector
+	 * @uses \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|yii\db\connection $this->db database connector
+     *
+     * @throws \Exception
 	 */
 	public function validateHeadRowItemDiff($filepath, &$opt = [])
     {
@@ -330,19 +354,21 @@ class DbBatch {
 					if ($headlength = (count ( $head )) != ($rowlength = count ( $rawrow ))) {
 						// print ("Row: $rownum, has different row length ($rowlength) compared to head length ($headlength)\n");
 						$errorMsg .= "Row: $rownum, has different row length ($rowlength) compared to head length ($headlength)\n";
-					} else {
+					// } else {
 						// $row = array_combine ( $head , $rawrow );
 					}
 				}
 			}
 			
 			if (! empty ( $errorMsg )) {
-				throw \Exception ( $errorMsg );
+				throw new \Exception( $errorMsg );
 			}
 		} catch ( \Exception $e ) {
 			throw $e;
 		} finally {
-			$this->fileReader->close ();
+            if(isset($this->fileReader) && method_exists($this->fileReader,'close')) {
+                $this->fileReader->close ();
+            }
 		}
 	}
 	
@@ -370,7 +396,9 @@ class DbBatch {
 	 *        	closure to handle each row
 	 * @param array $opt        	
 	 *
-	 * @uses ADODB|yii\db\connection $this->db database connector
+	 * @uses \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|yii\db\connection $this->db database connector
+     *
+     * @throws \Exception
 	 */
 	public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet=null)
     {
@@ -448,7 +476,9 @@ class DbBatch {
 			$this->rollbackTrans ();
 			throw $e;
 		} finally {
-			$this->fileReader->close ();
+            if(isset($this->fileReader) && method_exists($this->fileReader,'close')) {
+                $this->fileReader->close ();
+            }
 			$opt ['extraData'] = $extraData;
 		}
 		
@@ -467,6 +497,8 @@ class DbBatch {
 	 * @param array $opt
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
+     *
+     * @throws \Exception
 	 */
 	public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet=null)
     {
@@ -546,7 +578,9 @@ class DbBatch {
 	        $this->rollbackTrans ();
 	        throw $e;
 	    } finally {
-	        $this->fileReader->close ();
+	        if(isset($this->fileReader) && method_exists($this->fileReader,'close')) {
+                $this->fileReader->close ();
+            }
 	        $opt ['extraData'] = $extraData;
 	    }
 	
@@ -566,6 +600,8 @@ class DbBatch {
 	 * @param array $opt        	
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
+     *
+     * @throws \Exception
 	 */
 	public function export($filepath, $table = "", $rowPopulator, &$opt = [])
     {
@@ -584,7 +620,7 @@ class DbBatch {
 		
 		if (!isset($rowPopulator)) {
 			$rowPopulator = function ($row, $rownum, $extraData) {
-				return row;
+				return $row;
 			};
 		}
 		
@@ -634,7 +670,8 @@ SQL;
 	 * @param callable $rowCallback        	
 	 * @param array $opt        	
 	 * @param null|array $result        	
-	 * @return void|array
+	 * @return array|null
+     * @throws \Exception
 	 */
 	public function mapReader($filepath, callable $rowPopulator, &$opt = [], $preferedSheet=null, &$result = null)
     {
@@ -650,22 +687,22 @@ SQL;
 				continue;
 			}
 			$firstRow = true;
-				$secondRow = false;
-				foreach ( $sheet->getRowIterator () as $rawrow ) {
-					if ($firstRow) {
-						$firstRow = false;
-						$secondRow = true;
-						$head = $rawrow;
-						$rownum++;
-						continue;
-					}
-					if ($secondRow && $ignoreSecondRow) {
-						$secondRow = false;
-						$rownum++;
-						continue;
-					}
-					$rownum++;
-					$row = array_combine ( $head, $rawrow ) ?: $this->headRowArrayCombine($head, $rawrow);
+            $secondRow = false;
+            foreach ( $sheet->getRowIterator () as $rawrow ) {
+                if ($firstRow) {
+                    $firstRow = false;
+                    $secondRow = true;
+                    $head = $rawrow;
+                    $rownum++;
+                    continue;
+                }
+                if ($secondRow && $ignoreSecondRow) {
+                    $secondRow = false;
+                    $rownum++;
+                    continue;
+                }
+                $rownum++;
+                $row = array_combine ( $head, $rawrow ) ?: $this->headRowArrayCombine($head, $rawrow);
 				$ret = $this->processClosure ( $rowPopulator, $row, $rownum, $extraData );
 				if (isset ( $result ) && is_array ( $result )) {
 					$result [] = $ret;
@@ -676,12 +713,13 @@ SQL;
 		if (isset ( $result ) && is_array ( $result )) {
 			return $result;
 		}
+		return null;
 	}
 	
 	/**
 	 *
-	 * @param ADODB
-	 * @return string
+	 * @param mixed
+	 * @return string|mixed
 	 */
 	public function getConnectionType($db = null)
     {
@@ -698,8 +736,8 @@ SQL;
 	/**
 	 *
 	 * @param array $opt        	
-	 * @throws Exception
-	 * @return ADODB
+	 * @throws \Exception
+	 * @return \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt
 	 */
 	public static function getAdodbConnection($opt)
     {
@@ -723,7 +761,8 @@ SQL;
 	 * @param string $table        	
 	 * @param array $row        	
 	 * @param array|callable $rowPopulator        	
-	 * @param array $extraData        	
+	 * @param array $extraData
+     * @throws \Exception
 	 */
 	public function insertRowIntoTable($table, $row, $rownum, $rowPopulator, &$extraData = [])
     {
@@ -783,9 +822,10 @@ SQL;
 				}
 				break;
 			default :
-				;
+				return false;
 				break;
 		}
+        return false;
 	}
 	
 	
@@ -796,6 +836,7 @@ SQL;
 	 * @param array $row
 	 * @param array|callable $rowUpdator
 	 * @param array $extraData
+     * @throws \Exception
 	 */
 	public function updateRowInTable($table, $row, $rownum, $rowUpdator, $condition = null, &$extraData = [])
     {
@@ -876,9 +917,10 @@ SQL;
 	            }
 	            break;
 	        default :
-	            ;
+	            return false;
 	            break;
 	    }
+        return false;
 	}
 	
 	/**
@@ -886,7 +928,8 @@ SQL;
 	 * @param string $table        	
 	 * @param array $row        	
 	 * @param array|callable $rowPopulator        	
-	 * @param array $extraData        	
+	 * @param array $extraData
+     * @throws \Exception
 	 */
 	public function insertRowIntoFile($writer, $row, $rownum = null, $rowPopulator = null, &$extraData = [])
     {
@@ -900,7 +943,7 @@ SQL;
 	 * @param array $row        	
 	 * @param array $extraData        	
 	 * @throws \Exception
-	 * @return mixed|\nordgen\DbBatch\Closure
+	 * @return mixed|\Closure
 	 */
 	public function getRowToInsert($rowPopulator, $row, $rownum, &$extraData)
     {
@@ -914,7 +957,7 @@ SQL;
 	 * @param array $row        	
 	 * @param array $extraData        	
 	 * @throws \Exception
-	 * @return mixed|\nordgen\DbBatch\Closure
+	 * @return mixed|\Closure
 	 */
 	public function processClosure($rowPopulator, $row, $rownum, &$extraData)
     {
@@ -927,7 +970,7 @@ SQL;
 					//return $overideRowWithKeyVals + $rowPopulator ( $row, $rownum, $extraData );
 					return $rowPopulator ( $row, $rownum, $extraData );
 				}
-				if ($rowPopulator instanceof Closure) {
+				if ($rowPopulator instanceof \Closure) {
 					$rowPopulator = $rowPopulator->bindTo ( $this );
 					return call_user_func_array ( $rowPopulator, [
 							$row,
@@ -1003,6 +1046,7 @@ SQL;
                 ;
                 break;
         }
+        return false;
     }
 
     /**
@@ -1126,7 +1170,7 @@ SQL;
 	}
 
     /**
-     * @return ADODB
+     * @return false|ADORecordSet
      */
     public function getQueryResult()
     {
@@ -1137,13 +1181,14 @@ SQL;
     /**
      * @param callable $callback
      * @param $extraData
-     * @return array|void
+     * @return array|FALSE
+     * @throws \Exception
      */
     public function mapDbResult(callable $callback, &$extraData)
     {
 		// Do nothing if
 		if (! isset ( $this->queryResult ) || ! $this->queryResult) {
-			return;
+			return false;
 		}
 		$arr = [ ];
 		foreach ( $this->queryResult as $rownum => $row ) {
@@ -1156,6 +1201,7 @@ SQL;
     /**
      * @param callable $callback
      * @param $extraData
+     * @throws \Exception
      */
     public function walkDbResult(callable $callback, &$extraData)
     {
@@ -1248,7 +1294,8 @@ SQL;
 	/**
 	 * Returns first row and first column
 	 *
-	 * @param string $sql        	
+	 * @param string $sql
+     * @returns mixed|null
 	 */
 	public function queryScalar($sql)
     {
@@ -1260,15 +1307,16 @@ SQL;
 				return $this->db->createCommand ( $sql )->queryScalar ();
 				break;
 			default :
-				;
+				return null;
 				break;
 		}
 	}
 	
 	/**
-	 * Returns first row and first column
+	 * Returns an array of first column in each rows
 	 *
-	 * @param string $sql        	
+	 * @param string $sql
+     * @returns array|false
 	 */
 	public function queryColumn($sql)
     {
@@ -1280,7 +1328,7 @@ SQL;
 				return $this->db->createCommand ( $sql )->queryColumn ();
 				break;
 			default :
-				;
+				return false;
 				break;
 		}
 	}
@@ -1288,7 +1336,8 @@ SQL;
 	/**
 	 * Returns first row
 	 *
-	 * @param string $sql        	
+	 * @param string $sql
+     * @returns array|false
 	 */
 	public function queryOne($sql)
     {
@@ -1300,7 +1349,7 @@ SQL;
 				return $this->db->createCommand ( $sql )->queryOne ();
 				break;
 			default :
-				;
+                return false;
 				break;
 		}
 	}
@@ -1308,7 +1357,8 @@ SQL;
 	/**
 	 * Returns all rows
 	 *
-	 * @param string $sql        	
+	 * @param string $sql
+     * @returns array|false
 	 */
 	public function queryAll($sql)
     {
@@ -1320,7 +1370,7 @@ SQL;
 				return $this->db->createCommand ( $sql )->queryAll ();
 				break;
 			default :
-				;
+                return false;
 				break;
 		}
 	}
@@ -1349,10 +1399,10 @@ SQL;
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
-				$this->db->FailTrans ();
+				$this->db->FailTrans();
 				break;
 			case 'yii\\db\\Connection' :
-				$this->yiiTransaction->rollBack ();
+				$this->yiiTransaction->rollBack();
 				break;
 			default :
 				;
@@ -1366,11 +1416,11 @@ SQL;
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
-				$this->db->FailTrans ();
-				$this->db->CompleteTrans ();
+				$this->db->FailTrans();
+				$this->db->CompleteTrans();
 				break;
 			case 'yii\\db\\Connection' :
-				$this->yiiTransaction->rollBack ();
+				$this->yiiTransaction->rollBack();
 				break;
 			default :
 				;
@@ -1384,10 +1434,10 @@ SQL;
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
-				$this->db->CompleteTrans ();
+				$this->db->CompleteTrans();
 				break;
 			case 'yii\\db\\Connection' :
-				$this->yiiTransaction->commit ();
+				$this->yiiTransaction->commit();
 				break;
 			default :
 				;
