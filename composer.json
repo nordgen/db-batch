@@ -3,7 +3,8 @@
 	"description" : "Database batch toolkit",
 	"require" : {
 		"box/spout" : "^2.4",
-		"adodb/adodb-php" : "^5.20"
+		"adodb/adodb-php": "^5.20",
+		"zendframework/zend-db": "^2.9"
 	},
 	"require-dev" : {
 		"codeception/codeception" : "^2.2",
@@ -15,11 +16,10 @@
 			"name" : "Kjell-Ake Lundblad",
 			"email" : "kjellake.lundblad@nordgen.org"
 		},
-{
+		{
 			"name" : "Petra Bratt Stamborg",
 			"email" : "petra.bratt@nordgen.org"
 		}
-
 	],
 	"autoload" : {
 		"psr-4" : {
