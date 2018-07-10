@@ -10,6 +10,13 @@ use Box\Spout\Common\Helper\GlobalFunctionsHelper;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use nordgen\DbBatch\Helpers\StringTemplateHelper;
+use Zend\Db\Adapter\Adapter;
+use Zend\Db\Adapter\Driver\ResultInterface;
+use Zend\Db\ResultSet\ResultSet;
+use Zend\Stdlib\ArrayObject;
+use Zend\Db\Sql\Sql;
+
+
 
 /**
  *
@@ -18,13 +25,17 @@ use nordgen\DbBatch\Helpers\StringTemplateHelper;
  */
 class DbBatch {
 	protected $yiiTransaction = null;
+
 	protected $connectionType = null;
+
+    /** @var \Box\Spout\Reader\ReaderInterface */
 	protected $fileReader = null;
 	public function getInternalFileReader()
     {
 		$this->fileReader;
 	}
-	
+
+    /** @var \Box\Spout\Reader\WriterInterface */
 	protected $fileWriter = null;
 	public function getInternalFileWriter()
     {
@@ -41,7 +52,7 @@ class DbBatch {
 	
 	/**
 	 *
-	 * @var \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|mixed
+     * @var \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|Adapter|mixed
 	 */
 	protected $db = null;
 	
@@ -290,7 +301,9 @@ class DbBatch {
 		// $this->getFileReader($filepath, $opt);
 		// $sheetIterator = (new \ArrayObject($reader))->getIterator();
 		// } else {
-		$this->fileReader = $this->getFileReader ( $filepath, $opt );
+
+
+        $this->fileReader = $this->getFileReaderObject($filepath, $opt);
 		$sheetIterator = $this->fileReader->getSheetIterator ();
 		// }
 		
@@ -312,7 +325,7 @@ class DbBatch {
 		// $opt['fileReader'] = $fileReader;
 		// $sheetIterator = (new \ArrayObject($fileReader))->getIterator();
 		// } else {
-		$opt ['fileReader'] = self::getFileReader ( $filepath, $opt );
+        $opt ['fileReader'] = self::getFileReaderStatic($filepath, $opt);
 		$sheetIterator = $opt ['fileReader']->getSheetIterator ();
 		// }
 		
@@ -322,13 +335,8 @@ class DbBatch {
 	/**
 	 * Populates given table in given database with data from file
 	 *
-	 * @param string $filepath
-	 *        	name to file to populate from
-	 * @param string $table
-	 *        	tablename
-	 * @param callable $rowPopulator
-	 *        	clousre to handle each row
-	 * @param array $opt        	
+     * @param string $filepath name to file to populate from
+     * @param array $opt
 	 *
 	 * @uses \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|yii\db\connection $this->db database connector
      *
@@ -344,6 +352,7 @@ class DbBatch {
 		try {
 			foreach ( $sheetIterator as $sheet ) {
 				$firstRow = true;
+                $head = [];
 				foreach ( $sheet->getRowIterator () as $rawrow ) {
 					if ($firstRow) {
 						$firstRow = false;
@@ -376,6 +385,8 @@ class DbBatch {
 	 * Helper function to allow different length in head (keys) and row (values) arrays.
 	 * @param array $head
 	 * @param array $row
+     *
+     * @return array
 	 */
 	public function headRowArrayCombine(array $head, array $row)
     {
@@ -387,18 +398,17 @@ class DbBatch {
 	 * Populates given table in given database with data from file
 	 * 
 	 * <p>NB $opt['extraData']['pk'] has to be set if 'id' is not primary key</p>
-	 * 
-	 * @param string $filepath
-	 *        	name to file to populate from
-	 * @param string $table
-	 *        	tablename
-	 * @param callable $rowPopulator
-	 *        	closure to handle each row
-	 * @param array $opt        	
+     *
+     * @param string $filepath name to file to populate from
+     * @param string $table tablename
+     * @param callable $rowPopulator closure to handle each row
+     * @param array $opt
+     * @param int $preferedSheet
 	 *
 	 * @uses \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|yii\db\connection $this->db database connector
      *
      * @throws \Exception
+     * @return bool success
 	 */
 	public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet=null)
     {
@@ -440,6 +450,7 @@ class DbBatch {
 				$firstRow = true;
 				$secondRow = false;
 				$successTotal = true;
+                    $head = [];
 				foreach ( $sheet->getRowIterator () as $rawrow ) {
 					if ($firstRow) {
 						$firstRow = false;
@@ -495,10 +506,12 @@ class DbBatch {
 	 * @param string $table tablename
 	 * @param callable $rowUpdator closure to handle each row
 	 * @param array $opt
+     * @param int $preferedSheet
 	 *
 	 * @uses ADODB|yii\db\connection $this->db database connector
      *
      * @throws \Exception
+     * @return bool success
 	 */
 	public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet=null)
     {
@@ -512,7 +525,6 @@ class DbBatch {
         $afterUpdate = $afterUpdate->bindTo($this);
         
         $ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
-        
         $updateWhereCondition = $opt['updateWhereCondition'] ?  : null;
         
         
@@ -537,6 +549,7 @@ class DbBatch {
 	    $this->startTrans ();
 	
 	    try {
+            $successTotal = false;
 	        foreach ( $sheetIterator as $sheet ) {
 	            if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
 	                continue;
@@ -544,6 +557,7 @@ class DbBatch {
 	            $firstRow = true;
 	            $secondRow = false;
 	            $successTotal = true;
+                $head = [];
 	            foreach ( $sheet->getRowIterator () as $rawrow ) {
 	                if ($firstRow) {
 	                    $firstRow = false;
@@ -613,9 +627,6 @@ class DbBatch {
 		
 		if (array_key_exists('head', $opt)) {
 			$extraData['head'] = $opt['head'];
-			
-			//$this->fileLogger->warning('copy head.');
-			//$this->fileLogger->warning('count head : '.count( $extraData['head']));
 		}
 		
 		if (!isset($rowPopulator)) {
@@ -635,17 +646,14 @@ WHERE
     AND Col.Table_Name = '$table'
 SQL;
 		$pk = $this->queryScalar($sql);
-		
 		$head = (isset ( $opt ) && array_key_exists ( 'head', $opt )) ? $opt ['head'] : [ ];
 
 		
 		//$this->fileLogger->warning('count head : '.count( $head));
 		
 		if (empty($head)) {
-			
 			$sql = "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name='$table'";
 			$headraw = $this->queryColumn ( $sql ); // Get column names of table
-			
 			$head = isset($pk) ? array_unique(array_merge([$pk], $headraw)) : $headraw;
 			$extraData['head'] = $head;
 			
@@ -681,7 +689,7 @@ SQL;
         $extraData = &$opt ['extraData'];
 		$ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
 		$rownum = 0;
-		$reader = $this->getFileReader ( $filepath, $opt );
+        $reader = $this->getFileReaderObject($filepath, $opt);
 		foreach ( $reader->getSheetIterator () as $sheet ) {
 			if (isset($preferedSheet) && $preferedSheet != $sheet->getName()) {
 				continue;
@@ -780,9 +788,7 @@ SQL;
                 // Create empty recordset
                 $sql = "SELECT * FROM $table WHERE $pk = -1";
                 $rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
-
                 $extraData ['rs'] = $rs;
-
                 $rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
 
                 // Ignore row if it is false
@@ -808,7 +814,6 @@ SQL;
 				// Ignore row if it is false
 				if (!!$rowToInsert) {
 				    $this->db->createCommand ()->insert ( $table, $rowToInsert );
-				    
 				    if ($isThrowExceptionEnabled) {
 				        return !!$this->db->createCommand ()->insert ( $table, $rowToInsert ) -> execute();
 				    } else {
@@ -818,9 +823,41 @@ SQL;
 				            return false;
 				        }
 				    }
-				     
 				}
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                //$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
+
+                $noInsertOnEmptyRow = isset ($extraData ['noInsertOnEmptyRow']) ? $extraData ['noInsertOnEmptyRow'] === true : false;
+
+                if ($noInsertOnEmptyRow && empty(array_filter($row))) {
+                    return true;
+                }
+
+                $rowToInsert = $this->getRowToInsert($rowPopulator, $row, $rownum, $extraData);
+
+                // Ignore row if it is false
+                if (!!$rowToInsert) {
+                    $sql = new Sql($this->db);
+                    $insert = $sql->insert($table);
+                    $insert->values($rowToInsert);
+                    $statement = $sql->prepareStatementForSqlObject($insert);
+                    try {
+                        $statement->execute();
+                    } catch (\Exception $e) {
+                        if ($isThrowExceptionEnabled) {
+                            throw $e;
+                        }
+                        return false;
+                    }
+                } elseif ($noInsertOnEmptyRow) {
+                    return true;
+                } elseif ($isThrowExceptionEnabled) {
+                    throw new \Exception("Could not prepare an insert sql.");
+                }
+                return false;
+
+                break;
 			default :
 				return false;
 				break;
@@ -880,10 +917,9 @@ SQL;
 	            $sql = "SELECT * FROM $table WHERE $condition";
 	            $rs = $this->db->Execute ( $sql ); // Execute the query and get selected recordset
 
-	            
-	
 	            // Ignore row if it is false
 	            if (!!$rowToUpdate) {
+
 	                $updateSQL = $this->db->GetUpdateSQL ( $rs, $rowToUpdate );
 	                $result = $this->db->Execute ( $updateSQL ); // Update the record in the database;
 	                if (!$result && $isThrowExceptionEnabled) {
@@ -916,6 +952,54 @@ SQL;
 	                
 	            }
 	            break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                //$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
+                // Create empty recordset
+
+                $rowToUpdate = $this->getRowToInsert($rowUpdator, $row, $rownum, $extraData);
+
+                // parse $condition with $rowToUpdate context
+                $templateData = [
+                    'fileRow' => &$row,
+                    'updateRow' => &$rowToUpdate,
+                    'extraData' => &$extraData
+                ];
+
+                if (isset($condition) && is_array($condition) && count($condition) > 0) {
+                    $callback = function ($value, $key) use ($row) {
+                        return "$key = $value";
+                    };
+                    $condition = implode(' and ', self::arrayKeyMap($callback, $condition));
+                }
+
+                $condition = StringTemplateHelper::template($condition, $templateData);
+
+                // Select recordset to update
+                $sql = "SELECT * FROM $table WHERE $condition";
+                $rs = $this->db->Execute($sql); // Execute the query and get selected recordset
+
+                // Ignore row if it is false
+                if (!!$rowToUpdate) {
+                    $sql = new Sql($this->db);
+                    $update = $sql->update($table);
+                    $update->set($rowToUpdate);
+                    $update->where($condition);
+                    $statement = $sql->prepareStatementForSqlObject($update);
+                    try {
+                        $statement->execute();
+                    } catch (\Exception $e) {
+                        if ($isThrowExceptionEnabled) {
+                            throw $e;
+                        }
+                        return false;
+                    }
+                } elseif ($isThrowExceptionEnabled) {
+                    throw new \Exception("Could not prepare an insert sql.");
+                }
+
+                return false;
+
+                break;
 	        default :
 	            return false;
 	            break;
@@ -925,13 +1009,13 @@ SQL;
 	
 	/**
 	 *
-	 * @param string $table        	
-	 * @param array $row        	
-	 * @param array|callable $rowPopulator        	
+     * @param \Box\Spout\Writer\WriterInterface $table
+     * @param array $row
+     * @param array|callable $rowPopulator
 	 * @param array $extraData
      * @throws \Exception
 	 */
-	public function insertRowIntoFile($writer, $row, $rownum = null, $rowPopulator = null, &$extraData = [])
+    public function insertRowIntoFile(\Box\Spout\Writer\WriterInterface $writer, $row, $rownum = null, $rowPopulator = null, &$extraData = [])
     {
 		$rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
 		$writer->addRow ( $rowToInsert );
@@ -1007,7 +1091,7 @@ SQL;
 
     /**
      *
-     * @param string $sql            
+     * @param string $sql
      * @throws \Exception
      */
     public function getQueryFieldNames($sql)
@@ -1042,6 +1126,15 @@ SQL;
                 // $this->db->createCommand ( $sql )->execute ();
                 return [];
                 break;
+            case 'Zend\\Db\\Adapter\\Adapter':
+                if (preg_match("/^(.+)\\;\\s*$/", $sql, $matches)) {
+                    $sql = $matches[1];
+                }
+                $sql = "$sql Limit 1;";
+                $this->query($sql);
+
+                return $this->getQueryFieldNamesFromQueryResultSet();
+                break;
             default:
                 ;
                 break;
@@ -1051,7 +1144,6 @@ SQL;
 
     /**
      *
-     * @param string $sql            
      * @throws \Exception
      */
     public function getQueryFieldNamesFromQueryResultSet()
@@ -1075,6 +1167,17 @@ SQL;
             // $this->db->createCommand ( $sql )->execute ();
             return [];
         break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $rs = $this->getQueryResult();
+                $rsArr = [];
+                if (isset($rs) && $rs instanceof ResultSet && $rs->valid()) {
+                    // Get Field Names:
+                    $rs->rewind();
+                    $r = $rs->current();
+                    $rsArr = array_keys($r->getArrayCopy());
+                }
+                return $rsArr;
+                break;
         default :
             ;
             break;
@@ -1089,28 +1192,49 @@ SQL;
 	 */
 	public function iterateQueryResultWithCallback(callable $callback=null, $opt=[])
 	{
+
 	    switch ($this->connectionType) {
-	        case 'ADODB':
-	            $rs = $this->getQueryResult();
-	            if (!isset($callback)) {
-	                $callback = function ($currentrow, $opt=[])
-	                {
-	                    ;
-	                };
-	                 
-	                if (!$rs) { return; }
-	                 
-	                while (!$rs->EOF) {
-	                    $callback($rs->fields,$opt);
-	                    $rs->MoveNext();
-	                }
-	            }
-	             
-	            break;
-	        case 'yii\\db\\Connection':
-	             
-	             
-	            break;
+            case 'ADODB':
+                $rs = $this->getQueryResult();
+                if (!isset($callback)) {
+                    $callback = function ($currentrow, $opt = []) {
+                        ;
+                    };
+
+                    if (!$rs) {
+                        break;
+                    }
+
+                    while (!$rs->EOF) {
+                        $callback($rs->fields, $opt);
+                        $rs->MoveNext();
+                    }
+                }
+
+                break;
+            case 'yii\\db\\Connection':
+
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $rs = $this->getQueryResult();
+
+                if (!isset($callback)) {
+                    $callback = function ($currentrow, $opt = []) {
+                        ;
+                    };
+
+                    if (!$rs) {
+                        break;
+                    }
+
+                    foreach ($rs as $row) {
+                        $callback($row->getArrayCopy(), $opt);
+                    }
+
+                }
+
+                break;
 	        default:
 	            ;
 	            break;
@@ -1120,10 +1244,11 @@ SQL;
 	
 	/**
 	 *
-	 * @param string $sql        	
+     * @param string $sql
+     * @param array $parameters
 	 * @throws \Exception
 	 */
-	public function execute($sql)
+    public function execute($sql, $parameters = [])
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
@@ -1135,6 +1260,12 @@ SQL;
 			case 'yii\\db\\Connection' :
 				$this->db->createCommand ( $sql )->execute ();
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $statement = $this->db->createStatement($sql);
+                $statement->prepare();
+                $statement->execute($parameters);
+
+                break;
 			default :
 				;
 				break;
@@ -1143,10 +1274,11 @@ SQL;
 	
 	/**
 	 *
-	 * @param string $sql        	
+     * @param string $sql
+     * @param array $parameters
 	 * @throws \Exception
 	 */
-	public function query($sql)
+    public function query($sql, $parameters = [])
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
@@ -1158,9 +1290,22 @@ SQL;
 				break;
 			case 'yii\\db\\Connection' :
 				$rs = $this->db->createCommand ( $sql )->query ();
-				
 				$this->queryResult = new QueryResult ( $rs );
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $statement = $this->db->createStatement($sql);
+                $statement->prepare();
+                $result = $statement->execute($parameters);
+
+
+                if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                    $resultSet = new ResultSet;
+                    $resultSet->initialize($result);
+
+
+                    $this->queryResult = $resultSet;
+                }
+                break;
 			default :
 				;
 				break;
@@ -1170,7 +1315,7 @@ SQL;
 	}
 
     /**
-     * @return false|ADORecordSet
+     * @return false|ResultSet|ADORecordSet
      */
     public function getQueryResult()
     {
@@ -1295,9 +1440,10 @@ SQL;
 	 * Returns first row and first column
 	 *
 	 * @param string $sql
-     * @returns mixed|null
+     * @param array $parameters
+     * @return mixed|null
 	 */
-	public function queryScalar($sql)
+    public function queryScalar($sql, $parameters = [])
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
@@ -1306,6 +1452,21 @@ SQL;
 			case 'yii\\db\\Connection' :
 				return $this->db->createCommand ( $sql )->queryScalar ();
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $statement = $this->db->createStatement($sql);
+                $statement->prepare();
+                $result = $statement->execute($parameters);
+
+                if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                    $resultSet = new ResultSet;
+                    $resultSet->initialize($result);
+
+                    $row = $resultSet->current();
+
+                    return $row->offsetGet(0);
+                }
+                return null;
+                break;
 			default :
 				return null;
 				break;
@@ -1316,9 +1477,10 @@ SQL;
 	 * Returns an array of first column in each rows
 	 *
 	 * @param string $sql
+     * @param array $parameters
      * @returns array|false
 	 */
-	public function queryColumn($sql)
+    public function queryColumn($sql, $parameters = [])
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
@@ -1327,6 +1489,27 @@ SQL;
 			case 'yii\\db\\Connection' :
 				return $this->db->createCommand ( $sql )->queryColumn ();
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $statement = $this->db->createStatement($sql);
+                $statement->prepare();
+                $result = $statement->execute($parameters);
+
+                if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                    $resultSet = new ResultSet;
+                    $resultSet->initialize($result);
+
+                    $firstcolumn = [];
+                    foreach ($resultSet as $row) {
+                        if ($row instanceof ArrayObject) {
+                            $firstcolumn[] = $row->offsetGet(0);
+                        } elseif (is_array($row)) {
+                            $firstcolumn[] = array_shift($row);
+                        }
+                    }
+                    return $firstcolumn;
+                }
+                return null;
+                break;
 			default :
 				return false;
 				break;
@@ -1337,9 +1520,10 @@ SQL;
 	 * Returns first row
 	 *
 	 * @param string $sql
+     * @param array $parameters
      * @returns array|false
 	 */
-	public function queryOne($sql)
+    public function queryOne($sql, $parameters = [])
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
@@ -1348,6 +1532,21 @@ SQL;
 			case 'yii\\db\\Connection' :
 				return $this->db->createCommand ( $sql )->queryOne ();
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $statement = $this->db->createStatement($sql);
+                $statement->prepare();
+                $result = $statement->execute($parameters);
+
+                if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                    $resultSet = new ResultSet;
+                    $resultSet->initialize($result);
+
+                    $row = $resultSet->current();
+
+                    return $row->getArrayCopy();
+                }
+                return null;
+                break;
 			default :
                 return false;
 				break;
@@ -1358,9 +1557,10 @@ SQL;
 	 * Returns all rows
 	 *
 	 * @param string $sql
+     * @param array $parameters
      * @returns array|false
 	 */
-	public function queryAll($sql)
+    public function queryAll($sql, $parameters = [])
     {
 		switch ($this->connectionType) {
 			case 'ADODB' :
@@ -1369,6 +1569,18 @@ SQL;
 			case 'yii\\db\\Connection' :
 				return $this->db->createCommand ( $sql )->queryAll ();
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+
+                $statement = $this->db->createStatement($sql);
+                $statement->prepare();
+                $result = $statement->execute($parameters);
+
+                if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                    $resultSet = new ResultSet;
+                    $resultSet->initialize($result);
+                    return $resultSet->toArray();
+                }
+                return false;
 			default :
                 return false;
 				break;
@@ -1387,6 +1599,9 @@ SQL;
 				$this->yiiTransaction = $this->db->beginTransaction ();
 				// $db->execute($sql);
 				break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $this->db->beginTransaction();
+                break;
 			default :
 				;
 				break;
@@ -1402,8 +1617,13 @@ SQL;
 				$this->db->FailTrans();
 				break;
 			case 'yii\\db\\Connection' :
-				$this->yiiTransaction->rollBack();
-				break;
+                if (isset($this->yiiTransaction)) {
+                    $this->yiiTransaction->rollBack();
+                }
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $this->db->rollback();
+                break;
 			default :
 				;
 				break;
@@ -1420,8 +1640,13 @@ SQL;
 				$this->db->CompleteTrans();
 				break;
 			case 'yii\\db\\Connection' :
-				$this->yiiTransaction->rollBack();
-				break;
+                if (isset($this->yiiTransaction)) {
+                    $this->yiiTransaction->rollBack();
+                }
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $this->db->rollback();
+                break;
 			default :
 				;
 				break;
@@ -1437,8 +1662,13 @@ SQL;
 				$this->db->CompleteTrans();
 				break;
 			case 'yii\\db\\Connection' :
-				$this->yiiTransaction->commit();
-				break;
+                if (isset($this->yiiTransaction)) {
+                    $this->yiiTransaction->commit();
+                }
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $this->db->commit();
+                break;
 			default :
 				;
 				break;
