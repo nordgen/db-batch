@@ -22,8 +22,7 @@ use Zend\Db\Sql\Sql;
  * @author Kjell-Åke Lundblad <kjellake.lundblad@nordgen.org>
  *
  */
-class DbBatch
-{
+class DbBatch {
     protected $yiiTransaction = null;
 
     protected $connectionType = null;
@@ -36,7 +35,7 @@ class DbBatch
         $this->fileReader;
     }
 
-    /** @var \Box\Spout\Reader\WriterInterface */
+    /** @var \Box\Spout\Writer\WriterInterface */
     protected $fileWriter = null;
 
     public function getInternalFileWriter()
@@ -73,7 +72,7 @@ class DbBatch
             $db = $this->getAdodbConnection($db);
         }
         $this->connectionType = $this->getConnectionType($db);
-        if (!($this->connectionType == 'ADODB' || $this->connectionType == 'yii\\db\\Connection')) {
+        if (!(in_array($this->connectionType, ['ADODB', 'yii\\db\\Connection', 'Zend\\Db\\Adapter\\Adapter']))) {
             throw new \Exception ("Database connection is not valid.");
         }
         $this->db = $db;
@@ -206,6 +205,7 @@ class DbBatch
         return $reader;
     }
 
+
     /**
      * Returns Box\Spout reader object
      *
@@ -297,8 +297,7 @@ class DbBatch
      * @param array $opt
      * @return \Iterator|\Traversable|NULL
      */
-    public function getSheetIteratorObject($filepath, &$opt = [])
-    {
+    public function getSheetIteratorObject($filepath, &$opt = []) {
         // if (isset($opt) && array_key_exists('fieldHandleSpecialCases', $opt) && $opt['fieldHandleSpecialCases'] && ((array_key_exists ( 'readerType', $opt )) ? $opt ['readerType'] : Type::CSV) == Type::CSV) {
         // //$reader = $this->getCsvRowIterator($filepath, $opt);
         // $this->fileReader = \nordgen\DbBatch\CsvParserWrapper\Reader();
@@ -534,7 +533,7 @@ class DbBatch
 
         // Define an array_keymap function that takes an array and a closure and then returns key mapped closure result
 
-        $array_keymap = function ($callback, $arr) {
+        $array_keymap = function($callback, $arr) {
             $result = [];
             array_walk($arr, function ($value, $key) use ($callback, &$result) {
                 $result[$key] = $callback($value, $key);
@@ -743,7 +742,7 @@ SQL;
             $db = $this->db;
         }
         $connectionType = get_class($db);
-        if (strpos($connectionType, 'ADODB') == 0) {
+        if (strpos($connectionType, 'ADODB') === 0) {
             $connectionType = 'ADODB';
         }
         return $connectionType;
@@ -782,10 +781,10 @@ SQL;
      */
     public function insertRowIntoTable($table, $row, $rownum, $rowPopulator, &$extraData = [])
     {
-        $isThrowExceptionEnabled = isset ($extraData ['isThrowExceptionEnabled']) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+        $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
         switch ($this->connectionType) {
             case 'ADODB' :
-                $pk = isset ($extraData ['pk']) ? $extraData ['pk'] : 'id';
+                $pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
 
                 $noInsertOnEmptyRow = isset ($extraData ['noInsertOnEmptyRow']) ? $extraData ['noInsertOnEmptyRow'] === true : false;
 
