@@ -11,6 +11,9 @@ use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use nordgen\DbBatch\Helpers\StringTemplateHelper;
 use Zend\Db\Adapter\Adapter;
+use Zend\Db\Adapter\Driver\Pgsql\Result as PgsqlResult;
+use Zend\Db\Adapter\Driver\Pdo\Result as PdoResult;
+use Zend\Db\Adapter\Driver\Mysqli\Result as MysqlResult;
 use Zend\Db\Adapter\Driver\ResultInterface;
 use Zend\Db\ResultSet\ResultSet;
 use Zend\Stdlib\ArrayObject;
@@ -22,7 +25,8 @@ use Zend\Db\Sql\Sql;
  * @author Kjell-Åke Lundblad <kjellake.lundblad@nordgen.org>
  *
  */
-class DbBatch {
+class DbBatch
+{
     protected $yiiTransaction = null;
 
     protected $connectionType = null;
@@ -50,6 +54,12 @@ class DbBatch {
      * @var mixed
      */
     protected $queryResult = null;
+
+    /**
+     *
+     * @var mixed
+     */
+    protected $queryResultSet = null;
 
     /**
      *
@@ -297,7 +307,8 @@ class DbBatch {
      * @param array $opt
      * @return \Iterator|\Traversable|NULL
      */
-    public function getSheetIteratorObject($filepath, &$opt = []) {
+    public function getSheetIteratorObject($filepath, &$opt = [])
+    {
         // if (isset($opt) && array_key_exists('fieldHandleSpecialCases', $opt) && $opt['fieldHandleSpecialCases'] && ((array_key_exists ( 'readerType', $opt )) ? $opt ['readerType'] : Type::CSV) == Type::CSV) {
         // //$reader = $this->getCsvRowIterator($filepath, $opt);
         // $this->fileReader = \nordgen\DbBatch\CsvParserWrapper\Reader();
@@ -533,7 +544,7 @@ class DbBatch {
 
         // Define an array_keymap function that takes an array and a closure and then returns key mapped closure result
 
-        $array_keymap = function($callback, $arr) {
+        $array_keymap = function ($callback, $arr) {
             $result = [];
             array_walk($arr, function ($value, $key) use ($callback, &$result) {
                 $result[$key] = $callback($value, $key);
@@ -781,10 +792,10 @@ SQL;
      */
     public function insertRowIntoTable($table, $row, $rownum, $rowPopulator, &$extraData = [])
     {
-        $isThrowExceptionEnabled = isset ( $extraData ['isThrowExceptionEnabled'] ) ? $extraData ['isThrowExceptionEnabled'] === true : false;
+        $isThrowExceptionEnabled = isset ($extraData ['isThrowExceptionEnabled']) ? $extraData ['isThrowExceptionEnabled'] === true : false;
         switch ($this->connectionType) {
             case 'ADODB' :
-                $pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
+                $pk = isset ($extraData ['pk']) ? $extraData ['pk'] : 'id';
 
                 $noInsertOnEmptyRow = isset ($extraData ['noInsertOnEmptyRow']) ? $extraData ['noInsertOnEmptyRow'] === true : false;
 
@@ -1306,7 +1317,8 @@ SQL;
                     $resultSet->initialize($result);
 
 
-                    $this->queryResult = $resultSet;
+                    $this->queryResult = $result;
+                    $this->queryResultSet = $resultSet;
                 }
                 break;
             default :
@@ -1318,11 +1330,19 @@ SQL;
     }
 
     /**
-     * @return false|ResultSet|ADORecordSet
+     * @return false|PdoResult|PgsqlResult|MysqlResult
      */
     public function getQueryResult()
     {
         return $this->queryResult;
+    }
+
+    /**
+     * @return false|ResultSet|ADORecordSet
+     */
+    public function getQueryResultSet()
+    {
+        return $this->queryResultSet;
     }
 
 
