@@ -17,7 +17,6 @@ use Zend\Stdlib\ArrayObject;
 use Zend\Db\Sql\Sql;
 
 
-
 /**
  *
  * @author Kjell-Åke Lundblad <kjellake.lundblad@nordgen.org>
@@ -206,6 +205,7 @@ class DbBatch {
         return $reader;
     }
 
+
     /**
      * Returns Box\Spout reader object
      *
@@ -378,8 +378,8 @@ class DbBatch {
         } catch (\Exception $e) {
             throw $e;
         } finally {
-            if(isset($this->fileReader) && method_exists($this->fileReader,'close')) {
-                $this->fileReader->close ();
+            if (isset($this->fileReader) && method_exists($this->fileReader, 'close')) {
+                $this->fileReader->close();
             }
         }
     }
@@ -415,7 +415,7 @@ class DbBatch {
      */
     public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet = null)
     {
-        if (!(isset ( $opt ) && array_key_exists ( 'extraData', $opt ))) {
+        if (!(isset ($opt) && array_key_exists('extraData', $opt))) {
             $opt ['extraData'] = [];
         }
         $extraData = &$opt['extraData'];
@@ -490,8 +490,8 @@ class DbBatch {
             $this->rollbackTrans();
             throw $e;
         } finally {
-            if(isset($this->fileReader) && method_exists($this->fileReader,'close')) {
-                $this->fileReader->close ();
+            if (isset($this->fileReader) && method_exists($this->fileReader, 'close')) {
+                $this->fileReader->close();
             }
             $opt ['extraData'] = $extraData;
         }
@@ -527,8 +527,8 @@ class DbBatch {
         $beforeUpdate = $beforeUpdate->bindTo($this);
         $afterUpdate = $afterUpdate->bindTo($this);
 
-        $ignoreSecondRow = $opt['ignoreSecondRow'] ?  : false;
-        $updateWhereCondition = $opt['updateWhereCondition'] ?  : null;
+        $ignoreSecondRow = $opt['ignoreSecondRow'] ?: false;
+        $updateWhereCondition = $opt['updateWhereCondition'] ?: null;
 
 
         // Define an array_keymap function that takes an array and a closure and then returns key mapped closure result
@@ -596,7 +596,7 @@ class DbBatch {
             throw $e;
         } finally {
             if (isset($this->fileReader) && method_exists($this->fileReader, 'close')) {
-                $this->fileReader->close ();
+                $this->fileReader->close();
             }
             $opt ['extraData'] = $extraData;
         }
@@ -622,7 +622,7 @@ class DbBatch {
      */
     public function export($filepath, $table = "", $rowPopulator, &$opt = [])
     {
-        if (!(isset ( $opt ) && array_key_exists ( 'extraData', $opt ))) {
+        if (!(isset ($opt) && array_key_exists('extraData', $opt))) {
             $opt ['extraData'] = [];
         }
 
@@ -690,7 +690,7 @@ SQL;
      */
     public function mapReader($filepath, callable $rowPopulator, &$opt = [], $preferedSheet = null, &$result = null)
     {
-        if (!(isset ( $opt ) && array_key_exists ( 'extraData', $opt ))) {
+        if (!(isset ($opt) && array_key_exists('extraData', $opt))) {
             $opt ['extraData'] = [];
         }
         $extraData = &$opt ['extraData'];
@@ -703,7 +703,7 @@ SQL;
             }
             $firstRow = true;
             $secondRow = false;
-            foreach ( $sheet->getRowIterator () as $rawrow ) {
+            foreach ($sheet->getRowIterator() as $rawrow) {
                 if ($firstRow) {
                     $firstRow = false;
                     $secondRow = true;
@@ -717,7 +717,7 @@ SQL;
                     continue;
                 }
                 $rownum++;
-                $row = array_combine ( $head, $rawrow ) ?: $this->headRowArrayCombine($head, $rawrow);
+                $row = array_combine($head, $rawrow) ?: $this->headRowArrayCombine($head, $rawrow);
                 $ret = $this->processClosure($rowPopulator, $row, $rownum, $extraData);
                 if (isset ($result) && is_array($result)) {
                     $result [] = $ret;
@@ -786,7 +786,7 @@ SQL;
             case 'ADODB' :
                 $pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
 
-                $noInsertOnEmptyRow = isset ( $extraData ['noInsertOnEmptyRow'] ) ? $extraData ['noInsertOnEmptyRow'] === true : false;
+                $noInsertOnEmptyRow = isset ($extraData ['noInsertOnEmptyRow']) ? $extraData ['noInsertOnEmptyRow'] === true : false;
 
                 if ($noInsertOnEmptyRow && empty(array_filter($row))) {
                     return true;
@@ -794,23 +794,21 @@ SQL;
 
                 // Create empty recordset
                 $sql = "SELECT * FROM $table WHERE $pk = -1";
-                $rs = $this->db->Execute ( $sql ); // Execute the query and get the empty recordset
+                $rs = $this->db->Execute($sql); // Execute the query and get the empty recordset
                 $extraData ['rs'] = $rs;
-                $rowToInsert = $this->getRowToInsert ( $rowPopulator, $row, $rownum, $extraData );
+                $rowToInsert = $this->getRowToInsert($rowPopulator, $row, $rownum, $extraData);
 
                 // Ignore row if it is false
                 if (!!$rowToInsert) {
-                    $insertSQL = $this->db->GetInsertSQL ( $rs, $rowToInsert );
-                    $result = $this->db->Execute ( $insertSQL ); // Insert the record into the database;
+                    $insertSQL = $this->db->GetInsertSQL($rs, $rowToInsert);
+                    $result = $this->db->Execute($insertSQL); // Insert the record into the database;
                     if (!$result && $isThrowExceptionEnabled) {
                         throw new \Exception($this->db->ErrorMsg());
                     }
                     return !!$result;
-                }
-                elseif ($noInsertOnEmptyRow) {
+                } elseif ($noInsertOnEmptyRow) {
                     return true;
-                }
-                elseif ($isThrowExceptionEnabled) {
+                } elseif ($isThrowExceptionEnabled) {
                     throw new \Exception("Could not prepare an insert sql.");
                 }
                 return false;
@@ -891,7 +889,7 @@ SQL;
 
         switch ($this->connectionType) {
             case 'ADODB' :
-                $pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
+                $pk = isset ($extraData ['pk']) ? $extraData ['pk'] : 'id';
                 // Create empty recordset
                 $sql = "SELECT * FROM $table WHERE $pk = -1";
                 $rs = $this->db->Execute($sql); // Execute the query and get the empty recordset
@@ -1092,7 +1090,7 @@ SQL;
                 throw new \Exception ("RowPopulator was neither callable or an array. Row number: " . ($rownum ?: "unknown") . ".");
                 break;
         }
-        throw new \Exception("RowPopulator was neither callable or an array. Row number: " . ($rownum ?  : "unknown") . ".");
+        throw new \Exception("RowPopulator was neither callable or an array. Row number: " . ($rownum ?: "unknown") . ".");
     }
 
     /**
@@ -1111,7 +1109,7 @@ SQL;
                 $sql = "$sql Limit 1;";
 
                 $rs = $this->db->Execute($sql); // Execute the query and get the empty recordset
-                if (! $rs) {
+                if (!$rs) {
                     throw new \Exception("Adodb error " . $this->db->ErrorNo() . ": " . $this->db->ErrorMsg());
                 }
 
@@ -1119,8 +1117,8 @@ SQL;
                 # Get Field Names:
                 $aRet = array();
                 $lngCountFields = 0;
-                if (! $rs->EOF) {
-                    for ($i = 0; $i < $rs->FieldCount(); $i ++) {
+                if (!$rs->EOF) {
+                    for ($i = 0; $i < $rs->FieldCount(); $i++) {
                         $fld = $rs->FetchField($i);
                         $aRet[$lngCountFields] = $fld->name;
                         $lngCountFields++;
@@ -1462,13 +1460,15 @@ SQL;
                 $statement->prepare();
                 $result = $statement->execute($parameters);
 
-                if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                if ($result instanceof ResultInterface && $result->isQueryResult() && $result->getAffectedRows() > 0) {
                     $resultSet = new ResultSet;
                     $resultSet->initialize($result);
-
                     $row = $resultSet->current();
-
-                    return $row->offsetGet(0);
+                    if (!(isset($row) && $row->count() > 0)) {
+                        return null;
+                    }
+                    $rowArr = $row->getArrayCopy();
+                    return array_shift($rowArr);
                 }
                 return null;
                 break;
@@ -1698,10 +1698,10 @@ SQL;
      * @param array $arr
      * @return array
      */
-    protected static function arrayKeyMap(callable $callback, array $arr=[])
+    protected static function arrayKeyMap(callable $callback, array $arr = [])
     {
         $result = [];
-        array_walk($arr, function($value, $key) use($callback,&$result) {
+        array_walk($arr, function ($value, $key) use ($callback, &$result) {
             $result[$key] = $callback($value, $key);
         });
         return $result;
