@@ -990,8 +990,8 @@ SQL;
                 $condition = StringTemplateHelper::template($condition, $templateData);
 
                 // Select recordset to update
-                $sql = "SELECT * FROM $table WHERE $condition";
-                $rs = $this->db->Execute($sql); // Execute the query and get selected recordset
+                //$sql = "SELECT * FROM $table WHERE $condition";
+                //$rs = $this->db->Execute($sql); // Execute the query and get selected recordset
 
                 // Ignore row if it is false
                 if (!!$rowToUpdate) {
@@ -1275,10 +1275,23 @@ SQL;
                 $this->db->createCommand($sql)->execute();
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $statement = $this->db->createStatement($sql);
-                $statement->prepare();
-                $statement->execute($parameters);
+                $parameters = ($parameters===[]) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
+                if (is_array($parameters)) {
+                    $statement = $this->db->createStatement($sql);
+                    $statement->prepare();
+                    $result = $statement->execute($parameters);
 
+                    $preparedSql = $statement->getSql();
+                    $preparedParams = $statement->getParameterContainer();
+
+                }
+                elseif ($parameters === Adapter::QUERY_MODE_EXECUTE) {
+                    $result = $this->db->query($sql, $parameters);
+                }
+
+                if (!(isset($result) && $result instanceof ResultInterface && ($result->valid()) || $result->getAffectedRows()>0)) {
+                    throw new \Exception ("Db query failed");
+                }
                 break;
             default :
                 ;
@@ -1307,18 +1320,23 @@ SQL;
                 $this->queryResult = new QueryResult ($rs);
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $statement = $this->db->createStatement($sql);
-                $statement->prepare();
-                $result = $statement->execute($parameters);
-
+                $parameters = ($parameters===[]) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
+                if (is_array($parameters)) {
+                    $statement = $this->db->createStatement($sql);
+                    $statement->prepare();
+                    $result = $statement->execute($parameters);
+                }
+                elseif ($parameters === Adapter::QUERY_MODE_EXECUTE) {
+                    $result = $this->db->query($sql, $parameters);
+                }
 
                 if ($result instanceof ResultInterface && $result->isQueryResult()) {
                     $resultSet = new ResultSet;
                     $resultSet->initialize($result);
-
-
                     $this->queryResult = $result;
                     $this->queryResultSet = $resultSet;
+                } else {
+                    throw new \Exception ("Db query failed");
                 }
                 break;
             default :
@@ -1698,6 +1716,48 @@ SQL;
                 ;
                 break;
         }
+    }
+
+
+    public function getQueryRecordCount()
+    {
+        $ret = null;
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $ret = $this->queryResult->RecordCount();
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $ret = $this->queryResult->count();
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+
+    public function getQueryRecordFields()
+    {
+        $ret = null;
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $ret = $this->queryResult->FieldCount();
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $ret = $this->queryResult->getFieldCount();
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
     }
 
 
