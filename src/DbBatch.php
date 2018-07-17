@@ -18,7 +18,7 @@ use Zend\Db\Adapter\Driver\ResultInterface;
 use Zend\Db\ResultSet\ResultSet;
 use Zend\Stdlib\ArrayObject;
 use Zend\Db\Sql\Sql;
-
+use Zend\Db\Adapter\Exception\InvalidQueryException;
 
 /**
  *
@@ -1275,7 +1275,7 @@ SQL;
                 $this->db->createCommand($sql)->execute();
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $parameters = ($parameters===[]) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
+                $parameters = ($parameters===null) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
                 if (is_array($parameters)) {
                     $statement = $this->db->createStatement($sql);
                     $statement->prepare();
@@ -1284,14 +1284,26 @@ SQL;
                     $preparedSql = $statement->getSql();
                     $preparedParams = $statement->getParameterContainer();
 
+                    if (!(isset($result) && $result instanceof ResultInterface && (
+                            $result->valid() ||
+                            $result->count()>0 ||
+                            in_array('getAffectedRows',get_class_methods($result)) && $result->getAffectedRows()>0)
+                    )) {
+                        throw new \Exception ("Db query failed");
+                    }
+
                 }
                 elseif ($parameters === Adapter::QUERY_MODE_EXECUTE) {
-                    $result = $this->db->query($sql, $parameters);
+                    try {
+                        $result = $this->db->query($sql, $parameters);
+                    }
+                    catch (InvalidQueryException $e) {
+                        throw new \Exception ("Db query failed: " . $e->getMessage());
+                    }
+
                 }
 
-                if (!(isset($result) && $result instanceof ResultInterface && ($result->valid()) || $result->getAffectedRows()>0)) {
-                    throw new \Exception ("Db query failed");
-                }
+
                 break;
             default :
                 ;
@@ -1305,7 +1317,7 @@ SQL;
      * @param array $parameters
      * @throws \Exception
      */
-    public function query($sql, $parameters = [])
+    public function query($sql, $parameters = null)
     {
         switch ($this->connectionType) {
             case 'ADODB' :
@@ -1320,24 +1332,29 @@ SQL;
                 $this->queryResult = new QueryResult ($rs);
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $parameters = ($parameters===[]) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
+                $parameters = ($parameters===null) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
                 if (is_array($parameters)) {
                     $statement = $this->db->createStatement($sql);
                     $statement->prepare();
                     $result = $statement->execute($parameters);
+                    if ($result instanceof ResultInterface && $result->isQueryResult()) {
+                        $resultSet = new ResultSet;
+                        $resultSet->initialize($result);
+                        $this->queryResult = $result;
+                        $this->queryResultSet = $resultSet;
+                    } else {
+                        throw new \Exception ("Db query failed");
+                    }
                 }
                 elseif ($parameters === Adapter::QUERY_MODE_EXECUTE) {
                     $result = $this->db->query($sql, $parameters);
+                    if (!(isset($result) && ($result->valid() || $result->count()>0 /*|| $result->getAffectedRows()>0*/))) {
+                        throw new \Exception ("Db query failed");
+                    } else {
+                        $this->queryResultSet = $result;
+                    }
                 }
 
-                if ($result instanceof ResultInterface && $result->isQueryResult()) {
-                    $resultSet = new ResultSet;
-                    $resultSet->initialize($result);
-                    $this->queryResult = $result;
-                    $this->queryResultSet = $resultSet;
-                } else {
-                    throw new \Exception ("Db query failed");
-                }
                 break;
             default :
                 ;
@@ -1586,6 +1603,10 @@ SQL;
 
                     $row = $resultSet->current();
 
+                    if (!isset($row)) {
+                        return null;
+                    }
+
                     return $row->getArrayCopy();
                 }
                 return null;
@@ -1758,6 +1779,84 @@ SQL;
                 break;
         }
         return $ret;
+    }
+
+
+    public function queryRecordSetToHtml($attributes = '')
+    {
+        $html = '';
+        $attributes = trim($attributes);
+
+        $rs = $this->getQueryResultSet();
+
+        if (!isset($rs) || $rs->count()===0) {
+            return $html;
+        }
+
+        $html .= <<<HTML
+<table $attributes>
+
+HTML;
+
+        // Header
+        $rs->rewind();
+        foreach ($rs as $r) {
+
+            $html .= <<<HTML
+    <thead>
+        <tr>
+HTML;
+
+            foreach ($r as $col => $val) {
+                $html .= <<<HTML
+            <th>$col</th>
+HTML;
+
+            }
+
+            $html .= <<<HTML
+        </tr>
+    </thead>
+HTML;
+
+            break;
+        } // Header -- end
+        // Body
+
+        $html .= <<<HTML
+    <tbody>
+HTML;
+
+
+        $rs->rewind();
+        foreach ($rs as $r) {
+
+            $html .= <<<HTML
+        <tr>
+HTML;
+
+            foreach ($r as $col => $val) {
+                $html .= <<<HTML
+            <td>$val</td>
+HTML;
+
+            }
+
+            $html .= <<<HTML
+        </tr>
+HTML;
+
+        } // Body -- end
+        $html .= <<<HTML
+    </tbody>
+HTML;
+
+        $html .= <<<HTML
+</table>
+
+HTML;
+
+    return $html;
     }
 
 
