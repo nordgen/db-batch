@@ -15,6 +15,7 @@ use Zend\Db\Adapter\Driver\Pgsql\Result as PgsqlResult;
 use Zend\Db\Adapter\Driver\Pdo\Result as PdoResult;
 use Zend\Db\Adapter\Driver\Mysqli\Result as MysqlResult;
 use Zend\Db\Adapter\Driver\ResultInterface;
+use Zend\Db\Adapter\StatementContainerInterface;
 use Zend\Db\ResultSet\ResultSet;
 use Zend\Stdlib\ArrayObject;
 use Zend\Db\Sql\Sql;
@@ -63,7 +64,7 @@ class DbBatch
 
     /**
      *
-     * @var \ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|Adapter|mixed
+     * @var \Zend\Db\Adapter\Adapter|\ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|Adapter|mixed
      */
     protected $db = null;
 
@@ -424,7 +425,7 @@ class DbBatch
      * @throws \Exception
      * @return bool success
      */
-    public function populate($filepath, $table = "", $rowPopulator, &$opt = [], $preferedSheet = null)
+    public function populate($filepath, $table = "", $rowPopulator = null, &$opt = [], $preferedSheet = null)
     {
         if (!(isset ($opt) && array_key_exists('extraData', $opt))) {
             $opt ['extraData'] = [];
@@ -527,7 +528,7 @@ class DbBatch
      * @throws \Exception
      * @return bool success
      */
-    public function update($filepath, $table = "", $rowUpdator, &$opt = [], $preferedSheet = null)
+    public function update($filepath, $table = "", $rowUpdator = null, &$opt = [], $preferedSheet = null)
     {
         $extraData = (isset ($opt) && array_key_exists('extraData', $opt)) ? $opt['extraData'] : [];
         $beforeUpdate = (isset ($opt) && array_key_exists('beforeUpdate', $opt) && isset($opt['beforeUpdate'])) ? $opt ['beforeUpdate'] : function ($row, $rownum, $extraData) {
@@ -631,7 +632,7 @@ class DbBatch
      *
      * @throws \Exception
      */
-    public function export($filepath, $table = "", $rowPopulator, &$opt = [])
+    public function export($filepath, $table = "", $rowPopulator = null, &$opt = [])
     {
         if (!(isset ($opt) && array_key_exists('extraData', $opt))) {
             $opt ['extraData'] = [];
@@ -752,6 +753,18 @@ SQL;
         if (!isset($db)) {
             $db = $this->db;
         }
+
+        return self::getConnectionTypeStatic($db);
+    }
+
+
+    /**
+     *
+     * @param mixed
+     * @return string|mixed
+     */
+    public static function getConnectionTypeStatic($db = null)
+    {
         $connectionType = get_class($db);
         if (strpos($connectionType, 'ADODB') === 0) {
             $connectionType = 'ADODB';
@@ -1065,7 +1078,10 @@ SQL;
         switch (gettype($rowPopulator)) {
             case 'object' :
                 if (is_callable($rowPopulator)) {
-                    $rowPopulator = $rowPopulator->bindTo($this);
+                    if (method_exists($rowPopulator, 'bindTo')) {
+                        $rowPopulator = $rowPopulator->bindTo($this);
+                    }
+
                     //return $overideRowWithKeyVals + $rowPopulator ( $row, $rownum, $extraData );
                     return $rowPopulator ($row, $rownum, $extraData);
                 }
@@ -1197,6 +1213,7 @@ SQL;
                 ;
                 break;
         }
+        return false;
     }
 
 
@@ -1214,15 +1231,15 @@ SQL;
                     $callback = function ($currentrow, $opt = []) {
                         ;
                     };
+                }
 
-                    if (!$rs) {
-                        break;
-                    }
+                if (!$rs) {
+                    break;
+                }
 
-                    while (!$rs->EOF) {
-                        $callback($rs->fields, $opt);
-                        $rs->MoveNext();
-                    }
+                while (!$rs->EOF) {
+                    $callback($rs->fields, $opt);
+                    $rs->MoveNext();
                 }
 
                 break;
@@ -1237,16 +1254,35 @@ SQL;
                     $callback = function ($currentrow, $opt = []) {
                         ;
                     };
-
-                    if (!$rs) {
-                        break;
-                    }
-
-                    foreach ($rs as $row) {
-                        $callback($row->getArrayCopy(), $opt);
-                    }
-
                 }
+
+                if (!$rs) {
+                    break;
+                }
+
+                try {
+                    $noOfParams = self::getNrOfParams($callback);
+                } catch (\Exception $e) {
+                    $noOfParams = 3;
+                }
+
+                switch ($noOfParams) {
+                    case 1:
+                        foreach ($rs as $row) {
+                            $callback($row);
+                        }
+                        break;
+                    case 2:
+                        foreach ($rs as $row) {
+                            $callback($row, $opt);
+                        }
+                        break;
+                    default:
+                        foreach ($rs as $rownum => $row) {
+                            $callback($row, $rownum, $opt);
+                        }
+                }
+
 
                 break;
             default:
@@ -1262,7 +1298,7 @@ SQL;
      * @param array $parameters
      * @throws \Exception
      */
-    public function execute($sql, $parameters = [])
+    public function execute($sql, $parameters = null)
     {
         switch ($this->connectionType) {
             case 'ADODB' :
@@ -1275,40 +1311,57 @@ SQL;
                 $this->db->createCommand($sql)->execute();
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $parameters = ($parameters===null) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
-                if (is_array($parameters)) {
-                    $statement = $this->db->createStatement($sql);
-                    $statement->prepare();
-                    $result = $statement->execute($parameters);
+                if ($this->db instanceof \Zend\Db\Adapter\Adapter) {
+                    $parameters = ($parameters === null) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
+                    if (is_array($parameters)) {
+                        try {
+                            $statement = $this->db->createStatement($sql);
+                            if ($statement instanceof StatementContainerInterface) {
 
-                    $preparedSql = $statement->getSql();
-                    $preparedParams = $statement->getParameterContainer();
+                                $statement->prepare();
+                                $result = $statement->execute($parameters);
 
-                    if (!(isset($result) && $result instanceof ResultInterface && (
-                            $result->valid() ||
-                            $result->count()>0 ||
-                            in_array('getAffectedRows',get_class_methods($result)) && $result->getAffectedRows()>0)
-                    )) {
-                        throw new \Exception ("Db query failed");
+                                $preparedSql = $statement->getSql();
+                                $preparedParams = $statement->getParameterContainer();
+
+
+                                if (!(isset($result) && $result instanceof ResultInterface && (
+                                        $result->valid() ||
+                                        $result->count() > 0 ||
+                                        in_array('getAffectedRows', get_class_methods($result)) && $result->getAffectedRows() > 0)
+                                )) {
+                                    throw new \Exception ("Db query failed");
+                                } else {
+                                    return in_array('getAffectedRows', get_class_methods($result))
+                                        ? $result->getAffectedRows() : null;
+                                }
+                            } else {
+                                throw new \Exception ("Adapter statement is not implementing StatementContainerInterface");
+                            }
+
+
+                        } catch (InvalidQueryException $e) {
+                            throw new \Exception ("Db query failed: " . $e->getMessage());
+                        }
+
+                    } elseif ($parameters === Adapter::QUERY_MODE_EXECUTE) {
+                        try {
+                            $result = $this->db->query($sql, $parameters);
+                            return in_array('getAffectedRows', get_class_methods($result))
+                                ? $result->getAffectedRows() : null;
+                        } catch (InvalidQueryException $e) {
+                            throw new \Exception ("Db query failed: " . $e->getMessage());
+                        }
+
                     }
-
                 }
-                elseif ($parameters === Adapter::QUERY_MODE_EXECUTE) {
-                    try {
-                        $result = $this->db->query($sql, $parameters);
-                    }
-                    catch (InvalidQueryException $e) {
-                        throw new \Exception ("Db query failed: " . $e->getMessage());
-                    }
-
-                }
-
 
                 break;
             default :
                 ;
                 break;
         }
+        return false;
     }
 
     /**
@@ -1317,7 +1370,7 @@ SQL;
      * @param array $parameters
      * @throws \Exception
      */
-    public function query($sql, $parameters = null)
+    public function query($sql, $parameters = [])
     {
         switch ($this->connectionType) {
             case 'ADODB' :
@@ -1538,7 +1591,7 @@ SQL;
      *
      * @param string $sql
      * @param array $parameters
-     * @returns array|false
+     * @return array|false
      */
     public function queryColumn($sql, $parameters = [])
     {
@@ -1559,14 +1612,27 @@ SQL;
                     $resultSet->initialize($result);
 
                     $firstcolumn = [];
-                    foreach ($resultSet as $row) {
-                        if ($row instanceof ArrayObject) {
-                            $firstcolumn[] = $row->offsetGet(0);
-                        } elseif (is_array($row)) {
-                            $firstcolumn[] = array_shift($row);
+
+                    if ($resultSet->getReturnType() === 'arrayobject') {
+//                        $firstcolumn[] = $row->offsetGet(0);
+                        foreach ($resultSet->toArray() as $item) {
+                            $firstcolumn[] = array_shift($item);
                         }
+                        return $firstcolumn;
                     }
-                    return $firstcolumn;
+//                    elseif (is_array($resultSet)) {
+//                        $firstcolumn[] = array_shift($row);
+//                    }
+
+//
+//                    foreach ($resultSet as $row) {
+//                        if ($row instanceof ArrayObject) {
+//                            $firstcolumn[] = $row->offsetGet(0);
+//                        } elseif (is_array($row)) {
+//                            $firstcolumn[] = array_shift($row);
+//                        }
+//                    }
+
                 }
                 return null;
                 break;
@@ -1581,9 +1647,9 @@ SQL;
      *
      * @param string $sql
      * @param array $parameters
-     * @returns array|false
+     * @return array|false
      */
-    public function queryOne($sql, $parameters = [])
+    public function queryOne($sql, $parameters = null)
     {
         switch ($this->connectionType) {
             case 'ADODB' :
@@ -1595,6 +1661,7 @@ SQL;
             case 'Zend\\Db\\Adapter\\Adapter' :
                 $statement = $this->db->createStatement($sql);
                 $statement->prepare();
+                $parameters = ($parameters === null) ? [] : $parameters;
                 $result = $statement->execute($parameters);
 
                 if ($result instanceof ResultInterface && $result->isQueryResult()) {
@@ -1609,7 +1676,7 @@ SQL;
 
                     return $row->getArrayCopy();
                 }
-                return null;
+                return false;
                 break;
             default :
                 return false;
@@ -1622,7 +1689,7 @@ SQL;
      *
      * @param string $sql
      * @param array $parameters
-     * @returns array|false
+     * @return array|false
      */
     public function queryAll($sql, $parameters = [])
     {
@@ -1651,6 +1718,35 @@ SQL;
         }
     }
 
+
+    public function getAllFromResultSet()
+    {
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                try {
+                    return $this->getQueryResultSet()->toArray(); // Execute the query
+                } catch (\Exception $e) {
+                    return false;
+                }
+                break;
+            case 'yii\\db\\Connection' :
+                // Not implemented yet
+                return false;
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                try {
+                    return $this->getQueryResultSet()->toArray();
+                } catch (\Exception $e) {
+                    return false;
+                }
+
+
+            default :
+                return false;
+                break;
+        }
+    }
+
     /**
      */
     public function startTrans()
@@ -1664,7 +1760,7 @@ SQL;
                 // $db->execute($sql);
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $this->db->beginTransaction();
+                $this->db->getDriver()->getConnection()->beginTransaction();
                 break;
             default :
                 ;
@@ -1686,7 +1782,7 @@ SQL;
                 }
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $this->db->rollback();
+                $this->db->getDriver()->getConnection()->rollback();
                 break;
             default :
                 ;
@@ -1709,7 +1805,7 @@ SQL;
                 }
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $this->db->rollback();
+                $this->db->getDriver()->getConnection()->rollback();
                 break;
             default :
                 ;
@@ -1726,12 +1822,12 @@ SQL;
                 $this->db->CompleteTrans();
                 break;
             case 'yii\\db\\Connection' :
-                if (isset($this->yiiTransaction)) {
+                if (($this->db instanceof \yii\db\Transaction) && isset($this->yiiTransaction)) {
                     $this->yiiTransaction->commit();
                 }
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
-                $this->db->commit();
+                $this->db->getDriver()->getConnection()->commit();
                 break;
             default :
                 ;
@@ -1761,7 +1857,7 @@ SQL;
     }
 
 
-    public function getQueryRecordFields()
+    public function getQueryRecordFieldsCount()
     {
         $ret = null;
         switch ($this->connectionType) {
@@ -1773,6 +1869,72 @@ SQL;
                 break;
             case 'Zend\\Db\\Adapter\\Adapter' :
                 $ret = $this->queryResult->getFieldCount();
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+
+    public function rewindQueryRecord()
+    {
+        $ret = null;
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $ret = $this->queryResult->moveFirst();
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $rs = $this->getQueryResultSet();
+                $rs->buffer();
+                $ret = $rs->rewind();
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+    public function nextQueryRecord()
+    {
+        $ret = null;
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $ret = $this->queryResult->moveNext();
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $rs = $this->getQueryResultSet();
+                $ret = $rs->next();
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+
+    public function currentQueryRecord()
+    {
+        $ret = null;
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $ret = $this->queryResult->fetchObj();
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $rs = $this->getQueryResultSet();
+                $ret = $rs->current();
                 break;
             default :
                 ;
@@ -1856,7 +2018,7 @@ HTML;
 
 HTML;
 
-    return $html;
+        return $html;
     }
 
 
@@ -1865,6 +2027,11 @@ HTML;
      * @return bool
      */
     protected function isAssoc(array $arr)
+    {
+        return self::isAssocStatic($arr);
+    }
+
+    protected static function isAssocStatic(array $arr)
     {
         if (array() === $arr)
             return false;
@@ -1884,5 +2051,395 @@ HTML;
             $result[$key] = $callback($value, $key);
         });
         return $result;
+    }
+
+    public function createParameterizedUpdateSqlString($tabnam, $fields_or_record, $where)
+    {
+        return self::createParameterizedUpdateSqlStringStatic($tabnam, $fields_or_record, $where, $this->db);
+    }
+
+    public static function createParameterizedUpdateSqlStringStatic($tabnam, $fields_or_record, $where, $db = null)
+    {
+        $keys = self::isAssocStatic($fields_or_record) ? array_keys($fields_or_record) : $fields_or_record;
+        return "UPDATE $tabnam SET "
+            . implode(
+                ', ',
+                array_map(
+                    function ($key) use ($db) {
+                        return self::quoteIdentifierStatic($key, $db) . " = " . self::formatParameterNameStatic($key, $db);
+                    },
+                    $keys
+                )
+            )
+            . " WHERE $where";
+    }
+
+    public function createParameterizedInsertSqlString($tabnam, $fields_or_record)
+    {
+        return self::createParameterizedInsertSqlStringStatic($tabnam, $fields_or_record, $this->db);
+    }
+
+    public static function createParameterizedInsertSqlStringStatic($tabnam, $fields_or_record, $db = null)
+    {
+        $keys = self::isAssocStatic($fields_or_record) ? array_keys($fields_or_record) : $fields_or_record;
+        return "INSERT INTO $tabnam ("
+            . implode(', ', array_map(
+                    function ($key) use ($db) {
+                        return self::quoteIdentifierStatic($key, $db);
+                    },
+                    $keys
+                )
+            ) . ") VALUES ("
+            . implode(', ', array_map(
+                    function ($key) use ($db) {
+                        return self::formatParameterNameStatic($key, $db);
+                    },
+                    $keys
+                )
+            ) . ")";
+    }
+
+    public function quoteIdentifier($name)
+    {
+        return self::quoteIdentifierStatic($name, $this->db);
+    }
+
+    public static function quoteIdentifierStatic($name, $db = null)
+    {
+        $ret = $name;
+        switch (self::getConnectionTypeStatic($db)) {
+            case 'ADODB' :
+
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                if ($db instanceof \Zend\Db\Adapter\Adapter) {
+                    $ret = $db->platform->quoteIdentifier($name);
+                }
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+
+    public function formatParameterName($name)
+    {
+        return self::formatParameterNameStatic($name, $this->db);
+    }
+
+    public static function formatParameterNameStatic($name, $db = null)
+    {
+        $ret = $name;
+        switch (self::getConnectionTypeStatic($db)) {
+            case 'ADODB' :
+
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                if ($db instanceof \Zend\Db\Adapter\Adapter) {
+                    $ret = $db->driver->formatParameterName($name);
+                }
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+    public function getEmptyTableRecord($tabnam = null, $fields = null)
+    {
+        $ret = [];
+        if (is_string($fields)) {
+            $fields = explode(',', $fields);
+        }
+
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $metaColumns = $this->db->metaColumns($tabnam, false);
+                $metaColumnsFiltered = array_filter($metaColumns, function ($k) use ($fields) {
+                    return array_key_exists($k, $fields);
+                });
+
+                foreach ($metaColumnsFiltered as $key => $value) {
+                    $ret[$key] = array_key_exists('not_null', $value) && !$value['not_null'] ? null :
+                        (array_key_exists('type', $value) && in_array($this->db->metaType($value['type']), ['C', 'C2', 'X', 'X2', 'XL']) ? '' : null);
+                }
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $metadata = new \Zend\Db\Metadata\Metadata($this->db);
+                $table = $metadata->getTable($tabnam);
+                foreach ($table->getColumns() as $columnObj) {
+                    if ($columnObj instanceof \Zend\Db\Metadata\Object\ColumnObject) {
+                        $columnName = $columnObj->getName();
+                        if (in_array($columnName, $fields)) {
+                            $ret[$columnName] = $columnObj->isNullable() ? null :
+                                ($columnObj->getDataType() == 'string' ? '' : 0);
+                        }
+                    }
+                }
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+
+    public function convertTableRecordValuesToExpectedDataType(string $tabnam, array $record)
+    {
+        $ret = [];
+
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $metaColumns = $this->db->metaColumns($tabnam, false);
+                $metaColumnsFiltered = array_filter($metaColumns, function ($k) use ($record) {
+                    return array_key_exists($k, $record);
+                });
+
+                foreach ($metaColumnsFiltered as $key => $value) {
+                    $typeRaw = array_key_exists('type', $value) && $this->db->metaType($value['type']) !== null
+                        ? $this->db->metaType($value['type'])
+                        : null;
+
+                    $ret[$key] = self::convertValueToExpectedtype($value, self::convertAdodbRawTypeToExpectedType($typeRaw));
+
+                }
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $keys = array_keys($record);
+                $metadata = new \Zend\Db\Metadata\Metadata($this->db);
+                $table = $metadata->getTable($tabnam);
+                foreach ($table->getColumns() as $columnObj) {
+                    if ($columnObj instanceof \Zend\Db\Metadata\Object\ColumnObject) {
+                        $columnName = $columnObj->getName();
+                        if (in_array($columnName, $keys)) {
+                            $value = $record[$columnName];
+                            $expectedType = $columnObj->getDataType();
+                            $newValue = self::convertValueToExpectedtype($value, $expectedType);
+                            $ret[$columnName] = $columnObj->isNullable() && empty($newValue) ? null : $newValue;
+                        }
+                    }
+                }
+                break;
+            default :
+                ;
+                break;
+        }
+        return $ret;
+    }
+
+
+    /**
+     * @param string $tabnam
+     * @param string $fieldname
+     * @param array $record
+     * @return bool|float|int|string|null
+     */
+    public function convertTableRecordValueToExpectedDataTypeByFieldName(string $tabnam, string $fieldname, array $record)
+    {
+        $retval = false;
+
+        switch ($this->connectionType) {
+            case 'ADODB' :
+                $metaColumns = $this->db->metaColumns($tabnam, false);
+                $metaColumn = $metaColumns[$fieldname];
+                $typeRaw = array_key_exists('type', $metaColumn) && $this->db->metaType($metaColumn['type']) !== null
+                    ? $this->db->metaType($metaColumn['type'])
+                    : null;
+
+                $retval = self::convertValueToExpectedtype($metaColumn, self::convertAdodbRawTypeToExpectedType($typeRaw));
+                break;
+            case 'yii\\db\\Connection' :
+
+                break;
+            case 'Zend\\Db\\Adapter\\Adapter' :
+                $keys = array_keys($record);
+                $metadata = new \Zend\Db\Metadata\Metadata($this->db);
+
+                $columnObj = $metadata->getColumn($fieldname, $tabnam);
+                $columnName = $fieldname;
+                if (in_array($columnName, $keys)) {
+                    $value = $record[$columnName];
+                    $expectedType = $columnObj->getDataType();
+                    $newValue = self::convertValueToExpectedtype($value, $expectedType);
+                    $retval = $columnObj->isNullable() && empty($newValue) ? null : $newValue;
+                }
+
+                break;
+            default :
+                ;
+                break;
+        }
+        return $retval;
+    }
+
+
+    /**
+     * @param string $typeRaw
+     * @return string
+     */
+    protected static function convertAdodbRawTypeToExpectedType(string $typeRaw): string
+    {
+        switch ($typeRaw) {
+            case 'C':
+            case 'C2':
+            case 'X':
+            case 'X2':
+            case 'XL':
+                $expectedType = 'string';
+                break;
+            case 'B':
+                $expectedType = 'blob';
+                break;
+            case 'D':
+                $expectedType = 'date';
+                break;
+            case 'T':
+                $expectedType = 'timestamp';
+                break;
+            case 'L':
+                $expectedType = 'boolean';
+                break;
+            case 'I':
+                $expectedType = 'integer';
+                break;
+            case 'N':
+                $expectedType = 'double';
+                break;
+            default:
+                $expectedType = 'unknown type';
+        }
+        return $expectedType;
+    }
+
+
+    /**
+     * @param array $opt
+     * @param array $filterFunctions
+     * @return mixed
+     * @throws \Exception
+     */
+    public static function parseRecordValueFilters(array &$opt, $filterFunctions = [])
+    {
+        if (!array_key_exists('fieval', $opt)) {
+            throw new \Exception('First option parameter \$opt does\'t contain expected keys in argument ');
+        }
+        foreach ($filterFunctions AS $filterFunction) {
+            if (isset($filterFunction) && is_callable($filterFunction)) {
+                $opt['fieval'] = call_user_func_array($filterFunction, [$opt]);
+            }
+        }
+        return $opt['fieval'];
+    }
+
+    /**
+     * @param $value
+     * @param $expectedType
+     * @return bool|float|int|string
+     */
+    protected static function convertValueToExpectedtype($value, $expectedType)
+    {
+
+        $type = gettype($value);
+        if ($type === 'string') {
+            $value = trim($value);
+        }
+
+        switch ($expectedType) {
+            case 'boolean':
+                if ($type !== 'boolean') {
+                    switch (strtolower("$value")) {
+                        case '1':
+                        case 'true':
+                        case 't':
+                        case 'on':
+                        case 'yes':
+                        case 'y':
+                            $newValue = true;
+                            break;
+                        default:
+                            $newValue = false;
+                    }
+                } else {
+                    $newValue = $value;
+                }
+                break;
+            case 'double':
+                $newValue = is_numeric($value) ? floatval("$value") : $value;
+                break;
+            case 'integer':
+                $newValue = is_numeric($value) ? intval("$value") : $value;
+                break;
+
+            default:
+                $newValue = $value;
+
+        }
+
+
+        return $newValue;
+    }
+
+
+    /**
+     * @param $fieldnames
+     * @return array|false
+     */
+    public static function createTableRecordByFieldnames($fieldnames)
+    {
+        if (gettype($fieldnames) === 'string') {
+            $fieldnames = preg_replace('/[\s]*,[\s]*/', ',', trim($fieldnames));
+            $record_keys = explode(",", $fieldnames);
+        } elseif (gettype($fieldnames) === 'array') {
+            $record_keys = $fieldnames;
+        } else {
+            // Error !!!
+            return array();
+        }
+
+        function map_filter($str)
+        {
+            // Matches the cases in order schema.column as (alias), schema.(column) and (column)
+            return ((bool)preg_match("/.+?[\\.].+\\s+as\\s+(.*)|.+?[\\.](.*)|(.*)/", $str, $matches)) ? "${matches[1]}${matches[2]}${matches[3]}" : $str;
+        }
+
+
+        if (!function_exists('array_fill_keys')) {
+            function array_fill_keys($keys, $value = '')
+            {
+                return array_combine($keys, array_fill(0, count($keys), $value));
+            }
+        }
+
+        return array_fill_keys(array_unique(array_map("map_filter", $record_keys)), "");  // Php 5.2 <
+    }
+
+
+    /**
+     * @param $callable
+     * @return int
+     * @throws \ReflectionException
+     */
+    protected static function getNrOfParams($callable)
+    {
+        $CReflection = is_array($callable) ?
+            new \ReflectionMethod($callable[0], $callable[1]) :
+            new \ReflectionFunction($callable);
+        return $CReflection->getNumberOfParameters();
     }
 }
