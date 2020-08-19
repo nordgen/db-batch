@@ -10,16 +10,26 @@ use Box\Spout\Common\Helper\GlobalFunctionsHelper;
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use nordgen\DbBatch\Helpers\StringTemplateHelper;
-use Zend\Db\Adapter\Adapter;
-use Zend\Db\Adapter\Driver\Pgsql\Result as PgsqlResult;
-use Zend\Db\Adapter\Driver\Pdo\Result as PdoResult;
-use Zend\Db\Adapter\Driver\Mysqli\Result as MysqlResult;
-use Zend\Db\Adapter\Driver\ResultInterface;
-use Zend\Db\Adapter\StatementContainerInterface;
-use Zend\Db\ResultSet\ResultSet;
-use Zend\Stdlib\ArrayObject;
-use Zend\Db\Sql\Sql;
-use Zend\Db\Adapter\Exception\InvalidQueryException;
+use Zend\Db\Adapter\Adapter as ZAdapter;
+use Zend\Db\Adapter\Driver\Pgsql\Result as ZPgsqlResult;
+use Zend\Db\Adapter\Driver\Pdo\Result as ZPdoResult;
+use Zend\Db\Adapter\Driver\Mysqli\Result as ZMysqlResult;
+use Zend\Db\Adapter\Driver\ResultInterface as ZResultInterface;
+use Zend\Db\Adapter\StatementContainerInterface as ZStatementContainerInterface;
+use Zend\Db\ResultSet\ResultSet as ZResultSet;
+use Zend\Stdlib\ArrayObject as ZArrayObject;
+use Zend\Db\Sql\Sql as ZSql;
+use Zend\Db\Adapter\Exception\InvalidQueryException as ZInvalidQueryException;
+use Laminas\Db\Adapter\Adapter;
+use Laminas\Db\Adapter\Driver\Pgsql\Result as PgsqlResult;
+use Laminas\Db\Adapter\Driver\Pdo\Result as PdoResult;
+use Laminas\Db\Adapter\Driver\Mysqli\Result as MysqlResult;
+use Laminas\Db\Adapter\Driver\ResultInterface;
+use Laminas\Db\Adapter\StatementContainerInterface;
+use Laminas\Db\ResultSet\ResultSet;
+use Laminas\Stdlib\ArrayObject;
+use Laminas\Db\Sql\Sql;
+use Laminas\Db\Adapter\Exception\InvalidQueryException;
 
 /**
  *
@@ -64,7 +74,7 @@ class DbBatch
 
     /**
      *
-     * @var \Zend\Db\Adapter\Adapter|\ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|Adapter|mixed
+     * @var \Laminas\Db\Adapter\Adapter|\ADOConnection|\ADODB_postgres8|\ADODB_postgres9|\ADODB_mysql|\ADODB_mysqli|\ADODB_mysqlt|Adapter|mixed
      */
     protected $db = null;
 
@@ -82,15 +92,32 @@ class DbBatch
         if (is_array($db)) {
             $db = $this->getAdodbConnection($db);
         }
+
         $this->connectionType = $this->getConnectionType($db);
-        if (!(in_array($this->connectionType, ['ADODB', 'yii\\db\\Connection', 'Zend\\Db\\Adapter\\Adapter']))) {
-            throw new \Exception ("Database connection is not valid.");
+        if (!(in_array($this->connectionType, ['ADODB', 'yii\\db\\Connection', 'Laminas\\Db\\Adapter\\Adapter']))) {
+            if($this->connectionType === 'Zend\\Db\\Adapter\\Adapter') {
+                $db = self::convertZendDbToLaminasConnection($db);
+                $this->connectionType = $this->getConnectionType($db);
+                throw new \Exception ("Zend database connection is no longer valid use Laminas database connection instead.");
+            } else {
+                throw new \Exception ("Database connection is not valid.");
+            }
         }
         $this->db = $db;
 
         $this->fileLogger = new Logger('Test');
         $this->fileLogger->pushHandler(new StreamHandler('mytest.log', Logger::WARNING));
         //$this->fileLogger->warning('Testing... ');
+    }
+
+
+    /**
+     * @param ZAdapter $db
+     * @return Adapter
+     */
+    protected static function convertZendDbToLaminasConnection(\Zend\Db\Adapter\Adapter $db) : \Laminas\Db\Adapter\Adapter
+    {
+        return new \Laminas\Db\Adapter\Adapter($db->getDriver());
     }
 
     /**
@@ -854,7 +881,7 @@ SQL;
                     }
                 }
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 //$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
 
                 $noInsertOnEmptyRow = isset ($extraData ['noInsertOnEmptyRow']) ? $extraData ['noInsertOnEmptyRow'] === true : false;
@@ -980,7 +1007,7 @@ SQL;
 
                 }
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 //$pk = isset ( $extraData ['pk'] ) ? $extraData ['pk'] : 'id';
                 // Create empty recordset
 
@@ -1157,7 +1184,7 @@ SQL;
                 // $this->db->createCommand ( $sql )->execute ();
                 return [];
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter':
+            case 'Laminas\\Db\\Adapter\\Adapter':
                 if (preg_match("/^(.+)\\;\\s*$/", $sql, $matches)) {
                     $sql = $matches[1];
                 }
@@ -1198,7 +1225,7 @@ SQL;
                 // $this->db->createCommand ( $sql )->execute ();
                 return [];
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $rs = $this->getQueryResult();
                 $rsArr = [];
                 if (isset($rs) && $rs instanceof ResultSet && $rs->valid()) {
@@ -1221,7 +1248,7 @@ SQL;
      * @param callback $callback
      * @param array $opt
      */
-    public function iterateQueryResultWithCallback(callable $callback = null, $opt = [])
+    public function iterateQueryResultWithCallback(callable $callback = null, &$opt = [])
     {
 
         switch ($this->connectionType) {
@@ -1247,7 +1274,7 @@ SQL;
 
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $rs = $this->getQueryResult();
 
                 if (!isset($callback)) {
@@ -1310,8 +1337,8 @@ SQL;
             case 'yii\\db\\Connection' :
                 $this->db->createCommand($sql)->execute();
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
-                if ($this->db instanceof \Zend\Db\Adapter\Adapter) {
+            case 'Laminas\\Db\\Adapter\\Adapter' :
+                if ($this->db instanceof \Laminas\Db\Adapter\Adapter) {
                     $parameters = ($parameters === null) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
                     if (is_array($parameters)) {
                         try {
@@ -1384,7 +1411,7 @@ SQL;
                 $rs = $this->db->createCommand($sql)->query();
                 $this->queryResult = new QueryResult ($rs);
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $parameters = ($parameters===null) ? Adapter::QUERY_MODE_EXECUTE : $parameters;
                 if (is_array($parameters)) {
                     $statement = $this->db->createStatement($sql);
@@ -1563,7 +1590,7 @@ SQL;
             case 'yii\\db\\Connection' :
                 return $this->db->createCommand($sql)->queryScalar();
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $statement = $this->db->createStatement($sql);
                 $statement->prepare();
                 $result = $statement->execute($parameters);
@@ -1602,7 +1629,7 @@ SQL;
             case 'yii\\db\\Connection' :
                 return $this->db->createCommand($sql)->queryColumn();
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $statement = $this->db->createStatement($sql);
                 $statement->prepare();
                 $result = $statement->execute($parameters);
@@ -1658,7 +1685,7 @@ SQL;
             case 'yii\\db\\Connection' :
                 return $this->db->createCommand($sql)->queryOne();
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $statement = $this->db->createStatement($sql);
                 $statement->prepare();
                 $parameters = ($parameters === null) ? [] : $parameters;
@@ -1700,7 +1727,7 @@ SQL;
             case 'yii\\db\\Connection' :
                 return $this->db->createCommand($sql)->queryAll();
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
 
                 $statement = $this->db->createStatement($sql);
                 $statement->prepare();
@@ -1733,7 +1760,7 @@ SQL;
                 // Not implemented yet
                 return false;
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 try {
                     return $this->getQueryResultSet()->toArray();
                 } catch (\Exception $e) {
@@ -1759,7 +1786,7 @@ SQL;
                 $this->yiiTransaction = $this->db->beginTransaction();
                 // $db->execute($sql);
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $this->db->getDriver()->getConnection()->beginTransaction();
                 break;
             default :
@@ -1781,7 +1808,7 @@ SQL;
                     $this->yiiTransaction->rollBack();
                 }
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $this->db->getDriver()->getConnection()->rollback();
                 break;
             default :
@@ -1804,7 +1831,7 @@ SQL;
                     $this->yiiTransaction->rollBack();
                 }
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $this->db->getDriver()->getConnection()->rollback();
                 break;
             default :
@@ -1826,7 +1853,7 @@ SQL;
                     $this->yiiTransaction->commit();
                 }
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $this->db->getDriver()->getConnection()->commit();
                 break;
             default :
@@ -1846,7 +1873,7 @@ SQL;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $ret = $this->queryResult->count();
                 break;
             default :
@@ -1867,7 +1894,7 @@ SQL;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $ret = $this->queryResult->getFieldCount();
                 break;
             default :
@@ -1888,7 +1915,7 @@ SQL;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $rs = $this->getQueryResultSet();
                 $rs->buffer();
                 $ret = $rs->rewind();
@@ -1910,7 +1937,7 @@ SQL;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $rs = $this->getQueryResultSet();
                 $ret = $rs->next();
                 break;
@@ -1932,7 +1959,7 @@ SQL;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $rs = $this->getQueryResultSet();
                 $ret = $rs->current();
                 break;
@@ -2114,8 +2141,8 @@ HTML;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
-                if ($db instanceof \Zend\Db\Adapter\Adapter) {
+            case 'Laminas\\Db\\Adapter\\Adapter' :
+                if ($db instanceof \Laminas\Db\Adapter\Adapter) {
                     $ret = $db->platform->quoteIdentifier($name);
                 }
                 break;
@@ -2142,8 +2169,8 @@ HTML;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
-                if ($db instanceof \Zend\Db\Adapter\Adapter) {
+            case 'Laminas\\Db\\Adapter\\Adapter' :
+                if ($db instanceof \Laminas\Db\Adapter\Adapter) {
                     $ret = $db->driver->formatParameterName($name);
                 }
                 break;
@@ -2176,11 +2203,11 @@ HTML;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
-                $metadata = new \Zend\Db\Metadata\Metadata($this->db);
+            case 'Laminas\\Db\\Adapter\\Adapter' :
+                $metadata = new \Laminas\Db\Metadata\Metadata($this->db);
                 $table = $metadata->getTable($tabnam);
                 foreach ($table->getColumns() as $columnObj) {
-                    if ($columnObj instanceof \Zend\Db\Metadata\Object\ColumnObject) {
+                    if ($columnObj instanceof \Laminas\Db\Metadata\Object\ColumnObject) {
                         $columnName = $columnObj->getName();
                         if (in_array($columnName, $fields)) {
                             $ret[$columnName] = $columnObj->isNullable() ? null :
@@ -2220,12 +2247,12 @@ HTML;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $keys = array_keys($record);
-                $metadata = new \Zend\Db\Metadata\Metadata($this->db);
+                $metadata = new \Laminas\Db\Metadata\Metadata($this->db);
                 $table = $metadata->getTable($tabnam);
                 foreach ($table->getColumns() as $columnObj) {
-                    if ($columnObj instanceof \Zend\Db\Metadata\Object\ColumnObject) {
+                    if ($columnObj instanceof \Laminas\Db\Metadata\Object\ColumnObject) {
                         $columnName = $columnObj->getName();
                         if (in_array($columnName, $keys)) {
                             $value = $record[$columnName];
@@ -2267,9 +2294,9 @@ HTML;
             case 'yii\\db\\Connection' :
 
                 break;
-            case 'Zend\\Db\\Adapter\\Adapter' :
+            case 'Laminas\\Db\\Adapter\\Adapter' :
                 $keys = array_keys($record);
-                $metadata = new \Zend\Db\Metadata\Metadata($this->db);
+                $metadata = new \Laminas\Db\Metadata\Metadata($this->db);
 
                 $columnObj = $metadata->getColumn($fieldname, $tabnam);
                 $columnName = $fieldname;
