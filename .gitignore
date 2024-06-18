@@ -50,4 +50,3 @@ _protected/backend/runtime/*
 
 .gitignore~
 
-tests/*
