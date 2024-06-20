@@ -408,7 +408,9 @@ HTML;
     ): string
     {
         $keys = ArrayHelper::isAssoc($fieldsOrRecord) ? array_keys($fieldsOrRecord) : $fieldsOrRecord;
-        $whereKeys = ArrayHelper::isAssoc($where) ? array_keys($where) : $where;
+        $whereKeys = is_array($where)
+            ? (ArrayHelper::isAssoc($where) ? array_keys($where) : $where)
+            : $where;
         return "UPDATE $tableName SET "
             . implode(
                 ', ',
@@ -454,7 +456,7 @@ HTML;
      */
     public function quoteIdentifier(string $name): string
     {
-        return self::quoteIdentifierStatic($name, $this->connection);
+        return static::quoteIdentifierStatic($name, $this->connection);
     }
 
     /**

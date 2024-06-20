@@ -219,6 +219,33 @@ class FirstCest
         $recordU2 = $this->dbBatch->queryOne('SELECT * FROM profiles WHERE first_name = :first_name',[':first_name' => 'new first name updated']);
         codecept_debug($recordU2);
         $I->assertSame(array_merge(['profile_id'=>3],$recordU),$recordU2);
+
+
+
+        $I->amGoingTo('Test DbBatch createParameterizedUpdateSqlString method with string condition.');
+
+        $I->comment('Collecting two records of table profiles by DbBatch.');
+        $recordU = [
+            'first_name' => 'new first name updated 2',
+            'last_name' => 'new last name updated 2',
+            'email' => 'new email updated 2',
+        ];
+        $whereU = '"profile_id" = 3';
+        $parametersU = array_merge(array_values($recordU),array_values($whereU));
+        $actualParameterizedUpdateSqlString = $this->dbBatch->createParameterizedUpdateSqlString('profiles',$recordU,$whereU);
+
+        $expectedParameterizedUpdateSqlString = 'UPDATE profiles SET "first_name" = :first_name, "last_name" = :last_name, "email" = :email WHERE "profile_id" = 3';
+
+        codecept_debug($actualParameterizedUpdateSqlString);
+        $I->assertEquals($expectedParameterizedUpdateSqlString, $actualParameterizedUpdateSqlString);
+
+        $resultU = $this->dbBatch->execute($actualParameterizedUpdateSqlString,$parametersU);
+        $I->assertIsInt($resultU);
+        $I->assertSame(1,$resultU);
+
+        $recordU2 = $this->dbBatch->queryOne('SELECT * FROM profiles WHERE first_name = :first_name',[':first_name' => 'new first name updated 2']);
+        codecept_debug($recordU2);
+        $I->assertSame(array_merge(['profile_id'=>3],$recordU),$recordU2);
     }
 
 
